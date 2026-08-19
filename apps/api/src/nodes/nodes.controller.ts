@@ -8,16 +8,19 @@ import {
   Param,
   ParseUUIDPipe,
   Patch,
+  Post,
   Query,
 } from '@nestjs/common';
 import {
-  paginationQuerySchema,
+  childrenQuerySchema,
+  moveNodeSchema,
   renameNodeSchema,
   type BreadcrumbDto,
+  type ChildrenQuery,
   type DeletePreviewDto,
+  type MoveNodeInput,
   type NodeDto,
   type NodePage,
-  type PaginationQuery,
   type RenameNodeInput,
 } from '@dataroom/shared';
 import { zodPipe } from '../common/zod-validation.pipe';
@@ -31,7 +34,7 @@ export class NodesController {
   @Get(':id/children')
   listChildren(
     @Param('id', ParseUUIDPipe) id: string,
-    @Query(zodPipe(paginationQuerySchema)) query: PaginationQuery,
+    @Query(zodPipe(childrenQuerySchema)) query: ChildrenQuery,
     @CurrentUser() user: RequestUser,
   ): Promise<NodePage> {
     return this.nodesService.listChildren(id, user.id, query);
@@ -60,6 +63,15 @@ export class NodesController {
     @CurrentUser() user: RequestUser,
   ): Promise<NodeDto> {
     return this.nodesService.rename(id, user.id, body);
+  }
+
+  @Post(':id/move')
+  move(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(zodPipe(moveNodeSchema)) body: MoveNodeInput,
+    @CurrentUser() user: RequestUser,
+  ): Promise<NodeDto> {
+    return this.nodesService.move(id, user.id, body);
   }
 
   @Delete(':id')

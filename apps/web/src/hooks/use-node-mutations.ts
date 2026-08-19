@@ -3,7 +3,12 @@ import {
   useQueryClient,
   type InfiniteData,
 } from "@tanstack/react-query";
-import type { CreateFolderInput, NodeDto, NodePage } from "@dataroom/shared";
+import type {
+  CreateFolderInput,
+  MoveNodeInput,
+  NodeDto,
+  NodePage,
+} from "@dataroom/shared";
 import { apiFetch } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 
@@ -83,6 +88,48 @@ export function useRenameNode(folderId: string) {
       // Refetch rather than trusting the local edit: a new name usually means
       // a new sort position, which only the server's ordering knows.
       void queryClient.invalidateQueries({ queryKey });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.breadcrumbs(nodeId),
+      });
+    },
+  });
+}
+
+export interface MoveVariables extends MoveNodeInput {
+  nodeId: string;
+}
+
+export function useMoveNode(folderId: string) {
+  const queryClient = useQueryClient();
+  const queryKey = queryKeys.children(folderId);
+
+  return useMutation({
+    mutationFn: ({ nodeId, ...body }: MoveVariables) =>
+      apiFetch<NodeDto>(`/nodes/${nodeId}/move`, { method: "POST", body }),
+    onMutate: async ({ nodeId }) => {
+      await queryClient.cancelQueries({ queryKey });
+      const previous = queryClient.getQueryData<ChildrenCache>(queryKey);
+
+      // It is leaving this folder, so drop it here right away; a rejected
+      // move (a name clash in the target) puts it back.
+      queryClient.setQueryData<ChildrenCache>(queryKey, (cache) =>
+        mapCachedItems(cache, (items) =>
+          items.filter((item) => item.id !== nodeId),
+        ),
+      );
+
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(queryKey, context.previous);
+      }
+    },
+    onSettled: (_data, _error, { nodeId, targetFolderId }) => {
+      void queryClient.invalidateQueries({ queryKey });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.children(targetFolderId),
+      });
       void queryClient.invalidateQueries({
         queryKey: queryKeys.breadcrumbs(nodeId),
       });

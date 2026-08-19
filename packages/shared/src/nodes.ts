@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { nodeNameSchema } from "./common";
+import { nodeNameSchema, paginationQuerySchema } from "./common";
 
 export const nodeTypeSchema = z.enum(["FOLDER", "FILE"]);
 export type NodeType = z.infer<typeof nodeTypeSchema>;
@@ -56,6 +56,28 @@ export const renameNodeSchema = z.strictObject({
 });
 
 export type RenameNodeInput = z.infer<typeof renameNodeSchema>;
+
+/**
+ * `type` narrows a listing to one kind of node. The folder picker in the move
+ * dialog uses it so a folder full of files doesn't push its subfolders out of
+ * reach behind pages of results.
+ */
+export const childrenQuerySchema = paginationQuerySchema.extend({
+  type: nodeTypeSchema.optional(),
+});
+
+export type ChildrenQuery = z.infer<typeof childrenQuerySchema>;
+
+export const moveNodeSchema = z.strictObject({
+  targetFolderId: z.uuid(),
+  /**
+   * What to do when the target already holds something by this name: refuse
+   * (the default, so the user decides) or keep both by auto-suffixing.
+   */
+  onConflict: z.enum(["fail", "rename"]).default("fail"),
+});
+
+export type MoveNodeInput = z.infer<typeof moveNodeSchema>;
 
 /**
  * What a delete would remove, counted over the whole subtree including the

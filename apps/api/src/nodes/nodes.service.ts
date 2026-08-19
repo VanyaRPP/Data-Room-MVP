@@ -6,12 +6,13 @@ import {
 import { Prisma } from '@prisma/client';
 import type {
   BreadcrumbDto,
+  ChildrenQuery,
   CreateFolderInput,
   DeletePreviewDto,
+  MoveNodeInput,
   NodeDto,
   NodePage,
   NodeType,
-  PaginationQuery,
   RenameNodeInput,
 } from '@dataroom/shared';
 import { PrismaService } from '../prisma/prisma.service';
@@ -64,13 +65,16 @@ export class NodesService {
   async listChildren(
     folderId: string,
     userId: string,
-    query: PaginationQuery,
+    query: ChildrenQuery,
   ): Promise<NodePage> {
     await this.access.requireOwnedFolder(folderId, userId);
 
     const cursor = query.cursor ? decodeCursor(query.cursor) : null;
     const keyset = cursor
       ? Prisma.sql`AND (${FOLDER_FIRST}, lower("name"), "id") > (${cursor.rank}::int, ${cursor.name}::text, ${cursor.id}::text)`
+      : Prisma.empty;
+    const typeFilter = query.type
+      ? Prisma.sql`AND "type" = ${query.type}::"NodeType"`
       : Prisma.empty;
 
     const rows = await this.prisma.$queryRaw<ChildRow[]>`
@@ -84,6 +88,7 @@ export class NodesService {
         -- Files only become visible once their upload is confirmed, so a
         -- failed or abandoned upload never shows up as a phantom row.
         AND ("type" = 'FOLDER' OR "status" = 'READY')
+        ${typeFilter}
         ${keyset}
       ORDER BY ${FOLDER_FIRST}, lower("name"), "id"
       LIMIT ${query.limit + 1}
@@ -179,6 +184,85 @@ export class NodesService {
     } catch (error) {
       throw this.asConflict(error);
     }
+  }
+
+  /**
+   * Moves a node into another folder.
+   *
+   * The requirement is only that files move, but the cycle check is written
+   * for the general case: moving a folder into its own subtree would detach
+   * that whole branch from the root and strand it.
+   */
+  async move(
+    nodeId: string,
+    userId: string,
+    input: MoveNodeInput,
+  ): Promise<NodeDto> {
+    const node = await this.access.requireOwnedNode(nodeId, userId);
+    const currentParentId = requireParentId(node, 'moved');
+    const target = await this.access.requireOwnedFolder(
+      input.targetFolderId,
+      userId,
+    );
+
+    if (target.roomId !== node.roomId) {
+      throw new BadRequestException('Items cannot move between data rooms');
+    }
+
+    // Already where it was asked to go: nothing to do, and reporting a name
+    // conflict against itself would be nonsense.
+    if (target.id === currentParentId) return toNodeDto(node);
+
+    if (
+      node.type === 'FOLDER' &&
+      (await this.containsNode(node.id, target.id))
+    ) {
+      throw new BadRequestException(
+        'A folder cannot be moved into itself or one of its own subfolders',
+      );
+    }
+
+    let name = node.name;
+    if (input.onConflict === 'rename') {
+      name = await this.nameConflict.resolveAvailableName(target.id, node.name);
+    } else {
+      const conflict = await this.nameConflict.findConflict(
+        target.id,
+        node.name,
+      );
+      if (conflict) throw new ConflictException(conflictMessage(conflict.type));
+    }
+
+    try {
+      const moved = await this.prisma.node.update({
+        where: { id: node.id },
+        data: { parentId: target.id, name },
+      });
+      return toNodeDto(moved);
+    } catch (error) {
+      throw this.asConflict(error);
+    }
+  }
+
+  /** Whether `candidateId` is `ancestorId` itself or sits somewhere beneath it. */
+  private async containsNode(
+    ancestorId: string,
+    candidateId: string,
+  ): Promise<boolean> {
+    const rows = await this.prisma.$queryRaw<{ id: string }[]>`
+      WITH RECURSIVE descendants AS (
+        SELECT "id" FROM "Node" WHERE "id" = ${ancestorId}
+
+        UNION ALL
+
+        SELECT n."id"
+        FROM "Node" n
+        JOIN descendants d ON n."parentId" = d."id"
+      )
+      SELECT "id" FROM descendants WHERE "id" = ${candidateId} LIMIT 1
+    `;
+
+    return rows.length > 0;
   }
 
   /**
