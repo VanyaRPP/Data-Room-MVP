@@ -182,8 +182,20 @@ async function uploadOne(
       queryKey: queryKeys.children(item.folderId),
     });
   } catch (error) {
+    // The reservation is holding this file's name. Release it, or retrying
+    // would collide with the failed attempt and land as "report (1).pdf".
+    await discardReservation(slot.nodeId);
     update(item.id, { status: "error", error: errorMessage(error) });
   } finally {
     releaseSlot();
+  }
+}
+
+async function discardReservation(nodeId: string): Promise<void> {
+  try {
+    await apiFetch<void>(`/nodes/${nodeId}`, { method: "DELETE" });
+  } catch {
+    // Best effort. An abandoned UPLOADING row never appears in a listing, and
+    // failing the retry over a bit of stranded bookkeeping would be worse.
   }
 }
