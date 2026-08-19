@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -32,8 +33,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="flex items-center justify-between border-b px-6 py-3">
-        <span className="font-semibold">Data Room</span>
+      <header className="flex items-center justify-between gap-4 border-b px-6 py-3">
+        <nav className="flex items-center gap-4">
+          <Link href="/" className="font-semibold">
+            Data Room
+          </Link>
+          <Link
+            href="/shared-with-me"
+            className="text-muted-foreground hover:text-foreground text-sm"
+          >
+            Shared with me
+          </Link>
+        </nav>
         {me && (
           <div className="flex items-center gap-3 text-sm">
             <span className="text-muted-foreground">{me.email}</span>

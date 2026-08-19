@@ -19,6 +19,7 @@ import { DeleteConfirmDialog } from "@/components/dialogs/delete-confirm-dialog"
 import { MoveDialog } from "@/components/dialogs/move-dialog";
 import { NewFolderDialog } from "@/components/dialogs/new-folder-dialog";
 import { RenameDialog } from "@/components/dialogs/rename-dialog";
+import { ShareDialog } from "@/components/dialogs/share-dialog";
 import { UploadButton } from "@/components/upload/upload-button";
 import { UploadDropzone } from "@/components/upload/upload-dropzone";
 import { useBreadcrumbs } from "@/hooks/use-breadcrumbs";
@@ -35,6 +36,7 @@ export function RoomBrowser({ folderId }: { folderId: string }) {
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [renameTarget, setRenameTarget] = useState<NodeDto | null>(null);
   const [moveTarget, setMoveTarget] = useState<NodeDto | null>(null);
+  const [shareTarget, setShareTarget] = useState<NodeDto | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<NodeDto | null>(null);
 
   const rootId = rooms.data?.[0]?.rootNodeId ?? null;
@@ -124,6 +126,9 @@ export function RoomBrowser({ folderId }: { folderId: string }) {
                   <DropdownMenuItem onClick={() => setMoveTarget(node)}>
                     Move
                   </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setShareTarget(node)}>
+                    Share
+                  </DropdownMenuItem>
                   <DropdownMenuItem
                     variant="destructive"
                     onClick={() => setDeleteTarget(node)}
@@ -154,6 +159,12 @@ export function RoomBrowser({ folderId }: { folderId: string }) {
         folderId={folderId}
         onOpenChange={(open) => {
           if (!open) setMoveTarget(null);
+        }}
+      />
+      <ShareDialog
+        node={shareTarget}
+        onOpenChange={(open) => {
+          if (!open) setShareTarget(null);
         }}
       />
       <DeleteConfirmDialog

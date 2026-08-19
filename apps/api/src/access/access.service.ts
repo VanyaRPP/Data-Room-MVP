@@ -1,12 +1,30 @@
 import {
   BadRequestException,
+  ForbiddenException,
+  GoneException,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
-import type { DataRoom, Node } from '@prisma/client';
+import type { DataRoom, Node, Share, User } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 export type OwnedNode = Node & { room: DataRoom };
+
+export type ActiveShare = Share & {
+  node: Node & { room: DataRoom };
+  createdBy: User;
+};
+
+export interface ShareViewer {
+  userId?: string;
+  email?: string;
+}
+
+export interface SharedNodeAccess {
+  share: ActiveShare;
+  node: Node;
+}
 
 /**
  * The single place any "may this user touch this node?" question is answered,
@@ -41,6 +59,105 @@ export class AccessService {
     }
 
     return node;
+  }
+
+  /**
+   * Resolves a share link, in the order a visitor experiences it.
+   *
+   * The link being dead comes first and is deliberately indistinguishable
+   * between "never existed", "revoked" and "the owner deleted it" - all three
+   * are 410, because telling them apart would confirm that a token was once
+   * real. Only after the link is known good does the viewer's identity matter.
+   */
+  async requireActiveShare(
+    token: string,
+    viewer: ShareViewer,
+  ): Promise<ActiveShare> {
+    const share = await this.prisma.share.findUnique({
+      where: { token },
+      include: { node: { include: { room: true } }, createdBy: true },
+    });
+
+    if (!share || share.revokedAt !== null) {
+      throw new GoneException(
+        'This link is no longer available. The owner may have removed it or revoked access.',
+      );
+    }
+
+    if (share.mode === 'PUBLIC') return share;
+
+    // The owner is never locked out of their own material - not least because
+    // the first thing anyone does with a new link is open it themselves.
+    if (viewer.userId === share.node.room.ownerId) return share;
+
+    if (!viewer.userId) {
+      throw new UnauthorizedException('Sign in to open this shared item');
+    }
+
+    const grant = await this.prisma.shareGrant.findFirst({
+      where: {
+        shareId: share.id,
+        // Granted by email, so a grant issued before the recipient registered
+        // still resolves; register() backfills userId when they sign up.
+        OR: [
+          { userId: viewer.userId },
+          ...(viewer.email ? [{ email: viewer.email }] : []),
+        ],
+      },
+    });
+
+    if (!grant) {
+      throw new ForbiddenException(
+        'This item has not been shared with your account',
+      );
+    }
+
+    return share;
+  }
+
+  /**
+   * The share link plus one node inside it. A node outside the shared subtree
+   * is 404: the link grants access to a branch, not to the whole room, and a
+   * different answer would let a holder probe for ids beyond it.
+   */
+  async requireSharedNode(
+    token: string,
+    nodeId: string,
+    viewer: ShareViewer,
+  ): Promise<SharedNodeAccess> {
+    const share = await this.requireActiveShare(token, viewer);
+
+    if (nodeId === share.nodeId) return { share, node: share.node };
+
+    const node = await this.prisma.node.findUnique({ where: { id: nodeId } });
+    if (!node || !(await this.isWithinSubtree(share.nodeId, nodeId))) {
+      throw new NotFoundException('Node not found');
+    }
+
+    return { share, node };
+  }
+
+  /** Whether `nodeId` sits anywhere beneath `rootId`. */
+  private async isWithinSubtree(
+    rootId: string,
+    nodeId: string,
+  ): Promise<boolean> {
+    // Walking up from the node rather than down from the root: an ancestor
+    // chain is one row per level, where a subtree could be thousands.
+    const rows = await this.prisma.$queryRaw<{ id: string }[]>`
+      WITH RECURSIVE ancestors AS (
+        SELECT "id", "parentId" FROM "Node" WHERE "id" = ${nodeId}
+
+        UNION ALL
+
+        SELECT n."id", n."parentId"
+        FROM "Node" n
+        JOIN ancestors a ON n."id" = a."parentId"
+      )
+      SELECT "id" FROM ancestors WHERE "id" = ${rootId} LIMIT 1
+    `;
+
+    return rows.length > 0;
   }
 }
 

@@ -35,3 +35,13 @@ export const CurrentUser = createParamDecorator(
     return request.user;
   },
 );
+
+/**
+ * The user if there is one, undefined otherwise. For @Public() routes where
+ * identity is optional but still meaningful - a share link may be public, or
+ * restricted to specific people who have to be recognised.
+ */
+export const OptionalUser = createParamDecorator(
+  (_data: unknown, ctx: ExecutionContext): RequestUser | undefined =>
+    ctx.switchToHttp().getRequest<Request>().user,
+);

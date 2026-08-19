@@ -8,7 +8,9 @@ import { AccessModule } from './access/access.module';
 import { AuthModule } from './auth/auth.module';
 import { FilesModule } from './files/files.module';
 import { NodesModule } from './nodes/nodes.module';
+import { PublicModule } from './public/public.module';
 import { RoomsModule } from './rooms/rooms.module';
+import { SharesModule } from './shares/shares.module';
 
 @Module({
   imports: [
@@ -18,6 +20,8 @@ import { RoomsModule } from './rooms/rooms.module';
     RoomsModule,
     NodesModule,
     FilesModule,
+    SharesModule,
+    PublicModule,
   ],
   controllers: [HealthController],
   providers: [

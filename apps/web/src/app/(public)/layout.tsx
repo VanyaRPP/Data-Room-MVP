@@ -1,0 +1,23 @@
+import Link from "next/link";
+
+/**
+ * The shell for share links. No account controls: a visitor here may well not
+ * have an account, and the page is read-only by definition.
+ */
+export default function PublicLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex min-h-screen flex-col">
+      <header className="flex items-center justify-between border-b px-6 py-3">
+        <Link href="/" className="font-semibold">
+          Data Room
+        </Link>
+        <span className="text-muted-foreground text-sm">Shared with you</span>
+      </header>
+      <main className="flex-1">{children}</main>
+    </div>
+  );
+}

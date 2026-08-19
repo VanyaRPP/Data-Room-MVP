@@ -31,6 +31,7 @@ export function middleware(request: NextRequest): NextResponse {
 }
 
 export const config = {
-  // Everything except: the API rewrite, public share pages, and static assets.
-  matcher: ["/((?!api|s|_next/static|_next/image|favicon.ico).*)"],
+  // Everything except: the API rewrite, share links, and static assets.
+  // `s/` rather than `s`, or this would also skip /shared-with-me.
+  matcher: ["/((?!api/|s/|_next/static|_next/image|favicon.ico).*)"],
 };
