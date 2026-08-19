@@ -4,10 +4,13 @@ import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import { BigIntSerializerInterceptor } from './common/bigint-serializer.interceptor';
 import { HealthController } from './health.controller';
 import { PrismaModule } from './prisma/prisma.module';
+import { AccessModule } from './access/access.module';
 import { AuthModule } from './auth/auth.module';
+import { NodesModule } from './nodes/nodes.module';
+import { RoomsModule } from './rooms/rooms.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule],
+  imports: [PrismaModule, AccessModule, AuthModule, RoomsModule, NodesModule],
   controllers: [HealthController],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

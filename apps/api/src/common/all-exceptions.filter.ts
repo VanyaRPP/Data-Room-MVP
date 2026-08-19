@@ -36,7 +36,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       const payload = exception.getResponse();
       return {
         statusCode: status,
-        error: HttpStatus[status] ?? 'Error',
+        error: reasonPhrase(status),
         message: this.extractMessage(payload, exception.message),
       };
     }
@@ -67,4 +67,16 @@ export class AllExceptionsFilter implements ExceptionFilter {
     }
     return fallback;
   }
+}
+
+/** `404` -> `Not Found`: HttpStatus names it NOT_FOUND, humans don't. */
+function reasonPhrase(status: number): string {
+  const name = HttpStatus[status];
+  if (!name) return 'Error';
+
+  return name
+    .toLowerCase()
+    .split('_')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
 }
