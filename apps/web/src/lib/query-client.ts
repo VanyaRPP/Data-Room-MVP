@@ -1,10 +1,16 @@
 import { QueryClient, isServer } from "@tanstack/react-query";
+import { ApiError } from "./api";
 
 function makeQueryClient(): QueryClient {
   return new QueryClient({
     defaultOptions: {
       queries: {
         staleTime: 15_000,
+        // 4xx responses (not found, unauthorized, conflict, ...) are
+        // meaningful answers, not transient failures - only retry on
+        // network errors or 5xx, and only twice.
+        retry: (failureCount, error) =>
+          !(error instanceof ApiError && error.status < 500) && failureCount < 2,
       },
     },
   });

@@ -1,0 +1,124 @@
+// Data Room MVP — core schema.
+// Design decisions are explained in the root README ("Design decisions" /
+// "How it scales"); this file documents only what isn't obvious from the
+// model shapes themselves.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  // Neon's pooled connection string (DATABASE_URL) can't run migrations;
+  // directUrl is the unpooled one `prisma migrate` needs. Locally, with a
+  // single docker-compose Postgres, both env vars point at the same URL.
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+
+  dataRooms   DataRoom[]
+  shareGrants ShareGrant[]
+  shares      Share[]      @relation("ShareCreator")
+}
+
+model DataRoom {
+  id        String   @id @default(uuid())
+  name      String
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id])
+  createdAt DateTime @default(now())
+
+  // Every room gets exactly one root FOLDER node at creation time; all other
+  // nodes have a non-null parentId. That keeps "is this node a root" a single
+  // null-check instead of a separate flag, and lets the sibling-name unique
+  // index (see migration.sql) treat every non-root node uniformly.
+  rootNodeId String? @unique
+  nodes      Node[]
+
+  @@index([ownerId])
+}
+
+enum NodeType {
+  FOLDER
+  FILE
+}
+
+enum FileStatus {
+  UPLOADING
+  READY
+}
+
+model Node {
+  id       String   @id @default(uuid())
+  roomId   String
+  room     DataRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  parentId String?
+  parent   Node?    @relation("Tree", fields: [parentId], references: [id], onDelete: Cascade)
+  children Node[]   @relation("Tree")
+
+  type NodeType
+  name String
+
+  // FILE-only fields:
+  size       BigInt?
+  mimeType   String?
+  storageKey String?     @unique
+  status     FileStatus? // UPLOADING until /files/:id/complete confirms the upload, then READY
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  shares Share[]
+
+  @@index([parentId])
+  @@index([roomId])
+}
+
+enum ShareMode {
+  PUBLIC // anyone with the link
+  RESTRICTED // only users with a matching ShareGrant
+}
+
+model Share {
+  id          String    @id @default(uuid())
+  nodeId      String
+  node        Node      @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  mode        ShareMode
+  // cuid2, not the default cuid(): cuid() is timestamp-prefixed and doesn't
+  // reach the ~128 bits of unpredictability an unguessable share link needs.
+  token       String    @unique @default(cuid(2))
+  createdById String
+  createdBy   User      @relation("ShareCreator", fields: [createdById], references: [id])
+  createdAt   DateTime  @default(now())
+  revokedAt   DateTime?
+
+  grants ShareGrant[]
+
+  @@index([nodeId])
+}
+
+enum ShareRole {
+  VIEWER
+  // EDITOR is deliberately left out of the MVP (only VIEWER is enforced) but
+  // kept as an enum member so adding it later is a permission-map change in
+  // AccessService, not a schema migration. See README "How it scales".
+}
+
+model ShareGrant {
+  id      String    @id @default(uuid())
+  shareId String
+  share   Share     @relation(fields: [shareId], references: [id], onDelete: Cascade)
+  email   String // granted by email so it works for not-yet-registered users too
+  userId  String?
+  user    User?     @relation(fields: [userId], references: [id])
+  role    ShareRole @default(VIEWER)
+
+  @@unique([shareId, email])
+}

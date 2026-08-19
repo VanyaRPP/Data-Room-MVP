@@ -1,3 +1,4 @@
+import cookieParser from 'cookie-parser';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
@@ -10,6 +11,8 @@ async function bootstrap(): Promise<void> {
   // sees every request as coming from the proxy's IP, which would make the
   // /auth throttler rate-limit all users as one.
   app.set('trust proxy', 1);
+
+  app.use(cookieParser());
 
   await app.listen(env.PORT);
 }
