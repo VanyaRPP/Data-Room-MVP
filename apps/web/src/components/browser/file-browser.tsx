@@ -30,6 +30,7 @@ interface FileBrowserProps {
   error: Error | null;
   onRetry: () => void;
   onOpenFolder: (node: NodeDto) => void;
+  onOpenFile: (node: NodeDto) => void;
   emptyState: ReactNode;
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
@@ -48,6 +49,7 @@ export function FileBrowser({
   error,
   onRetry,
   onOpenFolder,
+  onOpenFile,
   emptyState,
   hasNextPage,
   isFetchingNextPage,
@@ -92,7 +94,10 @@ export function FileBrowser({
               {/* max-w-0 with w-full is what lets the cell's content truncate
                   instead of forcing the table wider than its container. */}
               <TableCell className="w-full max-w-0">
-                <NodeName node={node} onOpenFolder={onOpenFolder} />
+                <NodeName
+                  node={node}
+                  onOpen={node.type === "FOLDER" ? onOpenFolder : onOpenFile}
+                />
               </TableCell>
               <TableCell className="text-muted-foreground tabular-nums">
                 {formatBytes(node.size)}
@@ -128,35 +133,28 @@ export function FileBrowser({
 
 function NodeName({
   node,
-  onOpenFolder,
+  onOpen,
 }: {
   node: NodeDto;
-  onOpenFolder: (node: NodeDto) => void;
+  onOpen: (node: NodeDto) => void;
 }) {
-  const className = "flex min-w-0 items-center gap-2 text-left";
-  const content = (
-    <>
+  const element = (
+    <button
+      type="button"
+      onClick={() => onOpen(node)}
+      className={cn(
+        "flex min-w-0 cursor-pointer items-center gap-2 text-left hover:underline",
+        node.type === "FOLDER" && "font-medium",
+      )}
+    >
       {node.type === "FOLDER" ? (
         <FolderIcon className="text-muted-foreground size-4 shrink-0" />
       ) : (
         <FileTextIcon className="text-muted-foreground size-4 shrink-0" />
       )}
       <span className="truncate">{node.name}</span>
-    </>
+    </button>
   );
-
-  const element =
-    node.type === "FOLDER" ? (
-      <button
-        type="button"
-        onClick={() => onOpenFolder(node)}
-        className={cn(className, "cursor-pointer font-medium hover:underline")}
-      >
-        {content}
-      </button>
-    ) : (
-      <span className={className}>{content}</span>
-    );
 
   if (node.name.length <= TOOLTIP_THRESHOLD) return element;
 

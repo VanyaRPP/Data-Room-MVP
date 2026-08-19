@@ -19,6 +19,8 @@ import { DeleteConfirmDialog } from "@/components/dialogs/delete-confirm-dialog"
 import { MoveDialog } from "@/components/dialogs/move-dialog";
 import { NewFolderDialog } from "@/components/dialogs/new-folder-dialog";
 import { RenameDialog } from "@/components/dialogs/rename-dialog";
+import { UploadButton } from "@/components/upload/upload-button";
+import { UploadDropzone } from "@/components/upload/upload-dropzone";
 import { useBreadcrumbs } from "@/hooks/use-breadcrumbs";
 import { useChildren } from "@/hooks/use-children";
 import { useRooms } from "@/hooks/use-rooms";
@@ -61,70 +63,79 @@ export function RoomBrowser({ folderId }: { folderId: string }) {
           isLoading={breadcrumbs.isLoading}
           onNavigate={(nodeId) => router.push(`/room/${nodeId}`)}
         />
-        <Button size="sm" onClick={() => setNewFolderOpen(true)}>
-          <FolderPlusIcon />
-          New folder
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button size="sm" variant="outline" onClick={() => setNewFolderOpen(true)}>
+            <FolderPlusIcon />
+            New folder
+          </Button>
+          <UploadButton folderId={folderId} />
+        </div>
       </div>
 
-      <div className="rounded-xl border">
-        <FileBrowser
-          items={items}
-          isLoading={children.isLoading}
-          error={children.error}
-          onRetry={() => void children.refetch()}
-          onOpenFolder={(node) => router.push(`/room/${node.id}`)}
-          hasNextPage={children.hasNextPage}
-          isFetchingNextPage={children.isFetchingNextPage}
-          onLoadMore={() => void children.fetchNextPage()}
-          emptyState={
-            <EmptyState
-              icon={<FolderIcon />}
-              title="This folder is empty"
-              description="Create a folder to start organising this data room."
-              action={
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setNewFolderOpen(true)}
-                >
-                  <FolderPlusIcon />
-                  New folder
-                </Button>
-              }
-            />
-          }
-          renderRowActions={(node) => (
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={`Actions for ${node.name}`}
-                  />
+      <UploadDropzone folderId={folderId}>
+        <div className="rounded-xl border">
+          <FileBrowser
+            items={items}
+            isLoading={children.isLoading}
+            error={children.error}
+            onRetry={() => void children.refetch()}
+            onOpenFolder={(node) => router.push(`/room/${node.id}`)}
+            onOpenFile={(node) => router.push(`/file/${node.id}`)}
+            hasNextPage={children.hasNextPage}
+            isFetchingNextPage={children.isFetchingNextPage}
+            onLoadMore={() => void children.fetchNextPage()}
+            emptyState={
+              <EmptyState
+                icon={<FolderIcon />}
+                title="This folder is empty"
+                description="Drop PDF files here to upload them, or create a folder."
+                action={
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setNewFolderOpen(true)}
+                    >
+                      <FolderPlusIcon />
+                      New folder
+                    </Button>
+                    <UploadButton folderId={folderId} />
+                  </div>
                 }
-              >
-                <MoreHorizontalIcon />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-auto min-w-32">
-                <DropdownMenuItem onClick={() => setRenameTarget(node)}>
-                  Rename
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setMoveTarget(node)}>
-                  Move
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  variant="destructive"
-                  onClick={() => setDeleteTarget(node)}
+              />
+            }
+            renderRowActions={(node) => (
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={`Actions for ${node.name}`}
+                    />
+                  }
                 >
-                  Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        />
-      </div>
+                  <MoreHorizontalIcon />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-auto min-w-32">
+                  <DropdownMenuItem onClick={() => setRenameTarget(node)}>
+                    Rename
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setMoveTarget(node)}>
+                    Move
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onClick={() => setDeleteTarget(node)}
+                  >
+                    Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          />
+        </div>
+      </UploadDropzone>
 
       <NewFolderDialog
         open={newFolderOpen}

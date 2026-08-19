@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { UploadQueuePanel } from "@/components/upload/upload-queue-panel";
 import { useMe } from "@/hooks/use-me";
 import { apiFetch } from "@/lib/api";
 
@@ -48,6 +49,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         )}
       </header>
       <main className="flex-1">{children}</main>
+      {/* In the shell, not a page: uploads keep running as the user navigates. */}
+      <UploadQueuePanel />
     </div>
   );
 }

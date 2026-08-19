@@ -6,11 +6,19 @@ import { HealthController } from './health.controller';
 import { PrismaModule } from './prisma/prisma.module';
 import { AccessModule } from './access/access.module';
 import { AuthModule } from './auth/auth.module';
+import { FilesModule } from './files/files.module';
 import { NodesModule } from './nodes/nodes.module';
 import { RoomsModule } from './rooms/rooms.module';
 
 @Module({
-  imports: [PrismaModule, AccessModule, AuthModule, RoomsModule, NodesModule],
+  imports: [
+    PrismaModule,
+    AccessModule,
+    AuthModule,
+    RoomsModule,
+    NodesModule,
+    FilesModule,
+  ],
   controllers: [HealthController],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

@@ -18,6 +18,7 @@ import type {
 import { PrismaService } from '../prisma/prisma.service';
 import { AccessService, requireParentId } from '../access/access.service';
 import { isUniqueConstraintViolation } from '../common/prisma-errors';
+import { StorageService } from '../storage/storage.service';
 import { NameConflictService } from './name-conflict.service';
 import { toNodeDto, type NodeRowShape } from './node-dto';
 
@@ -52,6 +53,7 @@ export class NodesService {
     private readonly prisma: PrismaService,
     private readonly access: AccessService,
     private readonly nameConflict: NameConflictService,
+    private readonly storage: StorageService,
   ) {}
 
   /**
@@ -305,12 +307,39 @@ export class NodesService {
     };
   }
 
-  /** Deletes a node and, via the schema's cascade, everything beneath it. */
+  /**
+   * Deletes a node and, via the schema's cascade, everything beneath it.
+   *
+   * Storage keys are collected before the rows disappear, then the blobs are
+   * removed afterwards: doing it in that order means a storage outage leaves
+   * orphaned blobs (logged, harmless) rather than rows pointing at files that
+   * are already gone.
+   */
   async delete(nodeId: string, userId: string): Promise<void> {
     const node = await this.access.requireOwnedNode(nodeId, userId);
     requireParentId(node, 'deleted');
 
+    const storageKeys = await this.collectStorageKeys(node.id);
     await this.prisma.node.delete({ where: { id: node.id } });
+    await this.storage.removeMany(storageKeys);
+  }
+
+  /** Every stored blob in this node's subtree, including its own. */
+  private async collectStorageKeys(nodeId: string): Promise<string[]> {
+    const rows = await this.prisma.$queryRaw<{ storageKey: string }[]>`
+      WITH RECURSIVE subtree AS (
+        SELECT "id", "storageKey" FROM "Node" WHERE "id" = ${nodeId}
+
+        UNION ALL
+
+        SELECT n."id", n."storageKey"
+        FROM "Node" n
+        JOIN subtree s ON n."parentId" = s."id"
+      )
+      SELECT "storageKey" FROM subtree WHERE "storageKey" IS NOT NULL
+    `;
+
+    return rows.map((row) => row.storageKey);
   }
 
   /**
