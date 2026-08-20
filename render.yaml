@@ -1,0 +1,44 @@
+# Render blueprint for the API. The web app deploys separately on Vercel.
+#
+# The database lives in Supabase, not here, so this file describes a single
+# stateless service. Secrets are marked sync:false and set in the Render
+# dashboard rather than committed.
+services:
+  - type: web
+    name: dataroom-api
+    runtime: node
+    plan: free
+    region: frankfurt
+    # The whole workspace is needed: the API imports @dataroom/shared, and pnpm
+    # resolves that through the lockfile at the repo root.
+    rootDir: .
+    buildCommand: >-
+      corepack enable &&
+      pnpm install --frozen-lockfile &&
+      pnpm --filter @dataroom/shared build &&
+      pnpm --filter api exec prisma generate &&
+      pnpm --filter api build
+    # Migrations run at start, not in the build: the free plan has no
+    # pre-deploy hook, and a build that touched the database would also run for
+    # previews that should never migrate production.
+    startCommand: >-
+      pnpm --filter api exec prisma migrate deploy &&
+      pnpm --filter api run start:prod
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Supabase: transaction pooler for queries, session pooler for migrations.
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      # Must be at least 32 characters; generate a fresh one for production.
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_BUCKET
+        value: dataroom-prod

@@ -14,7 +14,9 @@ async function bootstrap(): Promise<void> {
 
   app.use(cookieParser());
 
-  await app.listen(env.PORT);
+  // Bind every interface, not just loopback: a container's health check and
+  // router reach the process from outside it.
+  await app.listen(env.PORT, '0.0.0.0');
 }
 
 void bootstrap();
