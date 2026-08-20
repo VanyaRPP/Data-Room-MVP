@@ -10,6 +10,7 @@ import { FilesModule } from './files/files.module';
 import { NodesModule } from './nodes/nodes.module';
 import { PublicModule } from './public/public.module';
 import { RoomsModule } from './rooms/rooms.module';
+import { SearchModule } from './search/search.module';
 import { SharesModule } from './shares/shares.module';
 
 @Module({
@@ -21,6 +22,7 @@ import { SharesModule } from './shares/shares.module';
     NodesModule,
     FilesModule,
     SharesModule,
+    SearchModule,
     PublicModule,
   ],
   controllers: [HealthController],

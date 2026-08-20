@@ -20,6 +20,7 @@ export const queryKeys = {
   breadcrumbs: (nodeId: string) => ["breadcrumbs", nodeId] as const,
   deletePreview: (nodeId: string) => ["delete-preview", nodeId] as const,
   fileUrl: (fileId: string) => ["file-url", fileId] as const,
+  search: (query: string) => ["search", query] as const,
   shares: (nodeId: string) => ["shares", nodeId] as const,
   sharedWithMe: ["shared-with-me"] as const,
 

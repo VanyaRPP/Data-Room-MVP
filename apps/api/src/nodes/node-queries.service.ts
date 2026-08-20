@@ -1,7 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { BreadcrumbDto, ChildrenQuery, NodePage } from '@dataroom/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { decodeCursor, encodeCursor } from './cursor';
 import { toNodeDto, type NodeRowShape } from './node-dto';
 
 /**
@@ -14,13 +15,6 @@ const FOLDER_FIRST = Prisma.sql`(CASE WHEN "type" = 'FOLDER' THEN 0 ELSE 1 END)`
 interface ChildRow extends NodeRowShape {
   sortRank: number;
   sortName: string;
-}
-
-/** The position of the last row of a page, in the listing's exact sort order. */
-interface ChildrenCursor {
-  rank: number;
-  name: string;
-  id: string;
 }
 
 /**
@@ -117,31 +111,4 @@ export class NodeQueriesService {
       SELECT "id", "name" FROM ancestors ORDER BY depth DESC
     `;
   }
-}
-
-function encodeCursor(cursor: ChildrenCursor): string {
-  return Buffer.from(
-    JSON.stringify([cursor.rank, cursor.name, cursor.id]),
-  ).toString('base64url');
-}
-
-function decodeCursor(raw: string): ChildrenCursor {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8'));
-  } catch {
-    throw new BadRequestException('Invalid cursor');
-  }
-
-  if (
-    Array.isArray(parsed) &&
-    parsed.length === 3 &&
-    typeof parsed[0] === 'number' &&
-    typeof parsed[1] === 'string' &&
-    typeof parsed[2] === 'string'
-  ) {
-    return { rank: parsed[0], name: parsed[1], id: parsed[2] };
-  }
-
-  throw new BadRequestException('Invalid cursor');
 }

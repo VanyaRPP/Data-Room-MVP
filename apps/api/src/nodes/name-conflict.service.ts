@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { NodeType } from '@dataroom/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { escapeLikePattern } from './cursor';
 
 /** Anything that can run a raw query: the client itself or a transaction. */
 type QueryClient = Pick<Prisma.TransactionClient, '$queryRaw'>;
@@ -44,11 +45,6 @@ export function buildSuffixedName(
   index: number,
 ): string {
   return index === 0 ? `${base}${extension}` : `${base} (${index})${extension}`;
-}
-
-/** Escapes the LIKE wildcards so a name containing `%` or `_` matches literally. */
-function escapeLikePattern(value: string): string {
-  return value.replace(/[\\%_]/g, (match) => `\\${match}`);
 }
 
 /**

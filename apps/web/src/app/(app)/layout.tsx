@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { SearchBox } from "@/components/search-box";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UploadQueuePanel } from "@/components/upload/upload-queue-panel";
 import { useMe } from "@/hooks/use-me";
@@ -46,6 +47,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             Shared with me
           </Link>
         </nav>
+        <div className="hidden flex-1 justify-center px-4 sm:flex">
+          <SearchBox />
+        </div>
         <div className="flex items-center gap-3 text-sm">
           <ThemeToggle />
           {me && (
