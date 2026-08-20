@@ -2,6 +2,7 @@ import {
   useMutation,
   useQueryClient,
   type InfiniteData,
+  type QueryClient,
 } from "@tanstack/react-query";
 import type {
   CreateFolderInput,
@@ -99,80 +100,104 @@ export function useRenameNode(folderId: string) {
 }
 
 export interface MoveVariables extends MoveNodeInput {
-  nodeId: string;
+  nodeIds: string[];
 }
 
-export function useMoveNode(folderId: string) {
+/**
+ * Moves one or more items into another folder.
+ *
+ * One item or twenty go through the same batch endpoint, and therefore the
+ * same transaction: a refused move leaves the whole selection where it was,
+ * which is what makes the optimistic removal below safe to roll back whole.
+ */
+export function useMoveNodes(folderId: string) {
   const queryClient = useQueryClient();
   const queryKey = queryKeys.children(folderId);
 
   return useMutation({
-    mutationFn: ({ nodeId, ...body }: MoveVariables) =>
-      apiFetch<NodeDto>(`/nodes/${nodeId}/move`, { method: "POST", body }),
-    onMutate: async ({ nodeId }) => {
+    mutationFn: (body: MoveVariables) =>
+      apiFetch<NodeDto[]>("/nodes/move", { method: "POST", body }),
+    onMutate: async ({ nodeIds }) => {
       await queryClient.cancelQueries({ queryKey });
-      // Every sorted or filtered view of this folder is a separate cache
-      // entry; updating only the default one would leave the view the user is
-      // actually looking at unchanged.
-      const previous = queryClient.getQueriesData<ChildrenCache>({ queryKey });
+      const previous = snapshot(queryClient, queryKey);
 
-      // It is leaving this folder, so drop it here right away; a rejected
-      // move (a name clash in the target) puts it back.
-      queryClient.setQueriesData<ChildrenCache>({ queryKey }, (cache) =>
-        mapCachedItems(cache, (items) =>
-          items.filter((item) => item.id !== nodeId),
-        ),
-      );
+      // They are leaving this folder, so drop them here right away; a rejected
+      // move - a name clash in the target - puts them back.
+      dropFromCaches(queryClient, queryKey, nodeIds);
 
       return { previous };
     },
     onError: (_error, _variables, context) => {
-      for (const [key, data] of context?.previous ?? []) {
-        queryClient.setQueryData(key, data);
-      }
+      restore(queryClient, context?.previous);
     },
-    onSettled: (_data, _error, { nodeId, targetFolderId }) => {
+    onSettled: (_data, _error, { nodeIds, targetFolderId }) => {
       void queryClient.invalidateQueries({ queryKey });
       void queryClient.invalidateQueries({
         queryKey: queryKeys.children(targetFolderId),
       });
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.breadcrumbs(nodeId),
-      });
+      for (const nodeId of nodeIds) {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.breadcrumbs(nodeId),
+        });
+      }
     },
   });
 }
 
-export function useDeleteNode(folderId: string) {
+export function useDeleteNodes(folderId: string) {
   const queryClient = useQueryClient();
   const queryKey = queryKeys.children(folderId);
 
   return useMutation({
-    mutationFn: (nodeId: string) =>
-      apiFetch<void>(`/nodes/${nodeId}`, { method: "DELETE" }),
-    onMutate: async (nodeId) => {
+    mutationFn: (nodeIds: string[]) =>
+      apiFetch<void>("/nodes/delete", { method: "POST", body: { nodeIds } }),
+    onMutate: async (nodeIds) => {
       await queryClient.cancelQueries({ queryKey });
-      // Every sorted or filtered view of this folder is a separate cache
-      // entry; updating only the default one would leave the view the user is
-      // actually looking at unchanged.
-      const previous = queryClient.getQueriesData<ChildrenCache>({ queryKey });
+      const previous = snapshot(queryClient, queryKey);
 
-      queryClient.setQueriesData<ChildrenCache>({ queryKey }, (cache) =>
-        mapCachedItems(cache, (items) =>
-          items.filter((item) => item.id !== nodeId),
-        ),
-      );
+      dropFromCaches(queryClient, queryKey, nodeIds);
 
       return { previous };
     },
-    onError: (_error, _nodeId, context) => {
-      for (const [key, data] of context?.previous ?? []) {
-        queryClient.setQueryData(key, data);
-      }
+    onError: (_error, _nodeIds, context) => {
+      restore(queryClient, context?.previous);
     },
-    onSettled: (_data, _error, nodeId) => {
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey });
-      queryClient.removeQueries({ queryKey: queryKeys.deletePreview(nodeId) });
+      // Every preview counted rows that may no longer exist, and one covering
+      // a different selection can still overlap what was just deleted.
+      queryClient.removeQueries({ queryKey: queryKeys.deletePreviews });
     },
   });
+}
+
+type CacheSnapshot = ReturnType<QueryClient["getQueriesData"]>;
+
+/**
+ * Every sorted or filtered view of a folder is a separate cache entry, and
+ * they all nest under the plain key. Touching only the default one would leave
+ * the view the user is actually looking at unchanged.
+ */
+function snapshot(client: QueryClient, queryKey: readonly unknown[]) {
+  return client.getQueriesData<ChildrenCache>({ queryKey });
+}
+
+function dropFromCaches(
+  client: QueryClient,
+  queryKey: readonly unknown[],
+  nodeIds: string[],
+): void {
+  const leaving = new Set(nodeIds);
+
+  client.setQueriesData<ChildrenCache>({ queryKey }, (cache) =>
+    mapCachedItems(cache, (items) =>
+      items.filter((item) => !leaving.has(item.id)),
+    ),
+  );
+}
+
+function restore(client: QueryClient, previous: CacheSnapshot | undefined) {
+  for (const [key, data] of previous ?? []) {
+    client.setQueryData(key, data);
+  }
 }

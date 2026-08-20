@@ -15,25 +15,26 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useChildren } from "@/hooks/use-children";
-import { useMoveNode } from "@/hooks/use-node-mutations";
+import { useMoveNodes } from "@/hooks/use-node-mutations";
 import { useRooms } from "@/hooks/use-rooms";
 import { ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 interface MoveDialogProps {
-  node: NodeDto | null;
+  /** What is being moved. Empty closes the dialog. */
+  nodes: NodeDto[];
   folderId: string;
   onOpenChange: (open: boolean) => void;
 }
 
-export function MoveDialog({ node, folderId, onOpenChange }: MoveDialogProps) {
+export function MoveDialog({ nodes, folderId, onOpenChange }: MoveDialogProps) {
   return (
-    <Dialog open={node !== null} onOpenChange={onOpenChange}>
+    <Dialog open={nodes.length > 0} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
-        {node && (
+        {nodes.length > 0 && (
           <MoveDialogBody
-            key={node.id}
-            node={node}
+            key={nodes.map((node) => node.id).join(",")}
+            nodes={nodes}
             folderId={folderId}
             onClose={() => onOpenChange(false)}
           />
@@ -44,11 +45,11 @@ export function MoveDialog({ node, folderId, onOpenChange }: MoveDialogProps) {
 }
 
 function MoveDialogBody({
-  node,
+  nodes,
   folderId,
   onClose,
 }: {
-  node: NodeDto;
+  nodes: NodeDto[];
   folderId: string;
   onClose: () => void;
 }) {
@@ -58,7 +59,12 @@ function MoveDialogBody({
     new Set(),
   );
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const move = useMoveNode(folderId);
+  const move = useMoveNodes(folderId);
+
+  const movedIds = new Set(nodes.map((node) => node.id));
+  // A selection is always one folder's worth of items, so they share a parent
+  // and "where they are now" is a single folder to grey out.
+  const currentParentId = nodes[0]?.parentId ?? null;
 
   function toggleExpand(id: string): void {
     setExpandedIds((current) => {
@@ -78,14 +84,10 @@ function MoveDialogBody({
     if (!selectedId) return;
 
     move.mutate(
-      { nodeId: node.id, targetFolderId: selectedId, onConflict },
+      { nodeIds: [...movedIds], targetFolderId: selectedId, onConflict },
       {
         onSuccess: (moved) => {
-          toast.success(
-            moved.name === node.name
-              ? `Moved "${moved.name}"`
-              : `Moved and renamed to "${moved.name}"`,
-          );
+          toast.success(describeMove(nodes, moved));
           onClose();
         },
         onError: (error) => {
@@ -103,13 +105,17 @@ function MoveDialogBody({
       : null;
   const otherError = move.error && !conflict ? move.error.message : null;
 
+  const [only] = nodes;
+  const what =
+    nodes.length === 1 && only
+      ? `“${only.name}”`
+      : `these ${nodes.length} items`;
+
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Move {node.type === "FOLDER" ? "folder" : "file"}</DialogTitle>
-        <DialogDescription>
-          Choose where &ldquo;{node.name}&rdquo; should go.
-        </DialogDescription>
+        <DialogTitle>{moveTitle(nodes)}</DialogTitle>
+        <DialogDescription>Choose where {what} should go.</DialogDescription>
       </DialogHeader>
 
       <div className="max-h-64 overflow-y-auto rounded-lg border p-1">
@@ -119,8 +125,8 @@ function MoveDialogBody({
             id={room.rootNodeId}
             name={room.name}
             depth={0}
-            movedNodeId={node.id}
-            currentParentId={node.parentId}
+            movedIds={movedIds}
+            currentParentId={currentParentId}
             selectedId={selectedId}
             onSelect={select}
             expandedIds={expandedIds}
@@ -132,8 +138,8 @@ function MoveDialogBody({
 
       {conflict && (
         <p className="text-destructive text-sm">
-          {conflict} in that folder. Keep both to move it in with a numbered
-          name.
+          {conflict}. Keep both to move{" "}
+          {nodes.length === 1 ? "it in with a numbered name" : "them in with numbered names"}.
         </p>
       )}
       {otherError && <p className="text-destructive text-sm">{otherError}</p>}
@@ -169,17 +175,47 @@ function MoveDialogBody({
   );
 }
 
+function moveTitle(nodes: NodeDto[]): string {
+  const [only] = nodes;
+  if (nodes.length === 1 && only) {
+    return only.type === "FOLDER" ? "Move folder" : "Move file";
+  }
+  return `Move ${nodes.length} items`;
+}
+
+/**
+ * What happened, mentioning the auto-suffix only when there was one: being
+ * told an item was renamed matters, being told it wasn't is noise.
+ */
+function describeMove(before: NodeDto[], after: NodeDto[]): string {
+  const namesBefore = new Map(before.map((node) => [node.id, node.name]));
+  const renamed = after.filter(
+    (node) => namesBefore.get(node.id) !== node.name,
+  );
+
+  const [only] = after;
+  if (after.length === 1 && only) {
+    return renamed.length === 0
+      ? `Moved “${only.name}”`
+      : `Moved and renamed to “${only.name}”`;
+  }
+
+  return renamed.length === 0
+    ? `Moved ${after.length} items`
+    : `Moved ${after.length} items, renaming ${renamed.length} of them`;
+}
+
 interface FolderTreeNodeProps {
   id: string;
   name: string;
   depth: number;
-  movedNodeId: string;
+  movedIds: ReadonlySet<string>;
   currentParentId: string | null;
   selectedId: string | null;
   onSelect: (id: string) => void;
   expandedIds: ReadonlySet<string>;
   onToggleExpand: (id: string) => void;
-  /** True once an ancestor in this branch is the folder being moved. */
+  /** True once an ancestor in this branch is one of the folders being moved. */
   insideMovedNode: boolean;
 }
 
@@ -187,7 +223,7 @@ function FolderTreeNode({
   id,
   name,
   depth,
-  movedNodeId,
+  movedIds,
   currentParentId,
   selectedId,
   onSelect,
@@ -203,7 +239,7 @@ function FolderTreeNode({
 
   // Moving a folder into its own subtree would strand that branch, and moving
   // anything into where it already sits is a no-op.
-  const isSubtree = insideMovedNode || id === movedNodeId;
+  const isSubtree = insideMovedNode || movedIds.has(id);
   const isDisabled = isSubtree || id === currentParentId;
 
   return (
@@ -253,7 +289,7 @@ function FolderTreeNode({
               id={folder.id}
               name={folder.name}
               depth={depth + 1}
-              movedNodeId={movedNodeId}
+              movedIds={movedIds}
               currentParentId={currentParentId}
               selectedId={selectedId}
               onSelect={onSelect}

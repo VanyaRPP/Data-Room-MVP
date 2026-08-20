@@ -51,6 +51,31 @@ export class AccessService {
     return node;
   }
 
+  /**
+   * The same question for a whole batch, in one query.
+   *
+   * All or nothing: one id the user does not own fails the lot, with the same
+   * "not found" a single node would give. Anything else would let a caller
+   * probe for other people's ids by watching which parts of a batch survived.
+   */
+  async requireOwnedNodes(
+    nodeIds: string[],
+    userId: string,
+  ): Promise<OwnedNode[]> {
+    const ids = [...new Set(nodeIds)];
+
+    const nodes = await this.prisma.node.findMany({
+      where: { id: { in: ids }, room: { ownerId: userId } },
+      include: { room: true },
+    });
+
+    if (nodes.length !== ids.length) {
+      throw new NotFoundException('Node not found');
+    }
+
+    return nodes;
+  }
+
   async requireOwnedFolder(nodeId: string, userId: string): Promise<OwnedNode> {
     const node = await this.requireOwnedNode(nodeId, userId);
 

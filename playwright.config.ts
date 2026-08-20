@@ -11,6 +11,10 @@ export default defineConfig({
   // else is running, so parallel copies would fight over the same demo data.
   fullyParallel: false,
   workers: 1,
+  // Well past the default 30s. This is one long journey rather than a set of
+  // small tests, and every write in it is a round trip to a hosted database -
+  // about a second each, before any of them has gone wrong.
+  timeout: 120_000,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? "github" : "list",

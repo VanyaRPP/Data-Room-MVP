@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import type { NodeDto, NodeSort, SortDirection } from "@dataroom/shared";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -48,10 +49,15 @@ interface FileBrowserProps {
    */
   renderRowActions?: (node: NodeDto) => ReactNode;
   /**
-   * Enables dragging a row onto a folder row to move it there. Undefined on
+   * Enables dragging rows onto a folder row to move them there. Undefined on
    * read-only views, which makes every row undraggable.
    */
-  onMoveNode?: (node: NodeDto, targetFolder: FolderTarget) => void;
+  onMoveNodes?: (nodes: NodeDto[], targetFolder: FolderTarget) => void;
+  /**
+   * Adds the tick boxes that pick rows out for a bulk action. Absent on
+   * read-only views, which have no bulk action to offer.
+   */
+  selection?: BrowserSelection;
   /**
    * The folder one level up, shown as a row that navigates there and accepts
    * dropped rows. Absent at the top of the tree - and in a shared view that
@@ -66,6 +72,15 @@ interface FileBrowserProps {
   };
 }
 
+export interface BrowserSelection {
+  /** The picked rows, in listing order. */
+  nodes: NodeDto[];
+  has: (nodeId: string) => boolean;
+  /** `extend` is a shift-click, selecting the range back to the last one. */
+  toggle: (node: NodeDto, extend: boolean) => void;
+  toggleAll: () => void;
+}
+
 export interface FolderTarget {
   id: string;
   name: string;
@@ -74,11 +89,13 @@ export interface FolderTarget {
 export interface ParentFolder extends FolderTarget {
   onOpen: () => void;
   /** Absent on read-only views, leaving the row navigation-only. */
-  onDrop?: (node: NodeDto) => void;
+  onDrop?: (nodes: NodeDto[]) => void;
 }
 
 /** Marks a drag as coming from inside the table rather than the desktop. */
 const NODE_DRAG_TYPE = "application/x-dataroom-node";
+
+const NOTHING_DRAGGING: ReadonlySet<string> = new Set();
 
 export function FileBrowser({
   items,
@@ -92,27 +109,45 @@ export function FileBrowser({
   isFetchingNextPage,
   onLoadMore,
   renderRowActions,
-  onMoveNode,
+  onMoveNodes,
+  selection,
   parentFolder,
   sorting,
 }: FileBrowserProps) {
-  // The id being dragged, so a folder can tell whether it is a legal target
-  // for it. dataTransfer's payload is deliberately unreadable during dragover,
-  // so the only way to know is to remember what the drag started with.
-  const [draggingId, setDraggingId] = useState<string | null>(null);
+  // What is being dragged, so a folder can tell whether it is a legal target.
+  // dataTransfer's payload is deliberately unreadable during dragover, so the
+  // only way to know is to remember what the drag started with.
+  const [draggingIds, setDraggingIds] =
+    useState<ReadonlySet<string>>(NOTHING_DRAGGING);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const [overParent, setOverParent] = useState(false);
 
-  const isDraggable = onMoveNode !== undefined;
+  const isDraggable = onMoveNodes !== undefined;
+
+  /**
+   * Dragging a row that is part of the selection takes the whole selection
+   * with it; dragging any other row is about that row alone, and leaves the
+   * selection untouched.
+   */
+  function dragPayload(node: NodeDto): NodeDto[] {
+    return selection?.has(node.id) ? selection.nodes : [node];
+  }
+
+  function endDrag(): void {
+    setDraggingIds(NOTHING_DRAGGING);
+    setDropTargetId(null);
+    setOverParent(false);
+  }
 
   function canDropOn(node: NodeDto): boolean {
     return (
       isDraggable &&
       node.type === "FOLDER" &&
-      draggingId !== null &&
-      draggingId !== node.id
+      draggingIds.size > 0 &&
+      !draggingIds.has(node.id)
     );
   }
+
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
@@ -130,11 +165,31 @@ export function FileBrowser({
   if (isLoading) return <FileBrowserSkeleton />;
   if (items.length === 0) return <>{emptyState}</>;
 
+  // "All" means everything currently listed, not everything in the folder:
+  // pages not loaded yet can't be ticked, so claiming them would be a lie.
+  const someSelected = selection !== undefined && selection.nodes.length > 0;
+  const allSelected =
+    someSelected && items.every((item) => selection.has(item.id));
+
   return (
     <div>
       <Table>
         <TableHeader>
           <TableRow>
+            {selection && (
+              <TableHead className="w-10 pl-4">
+                <Checkbox
+                  checked={allSelected}
+                  indeterminate={someSelected && !allSelected}
+                  onCheckedChange={selection.toggleAll}
+                  aria-label={
+                    allSelected
+                      ? "Clear the selection"
+                      : "Select everything listed"
+                  }
+                />
+              </TableHead>
+            )}
             <SortableHeader column="name" sorting={sorting}>
               Name
             </SortableHeader>
@@ -160,7 +215,7 @@ export function FileBrowser({
             <TableRow
               onClick={parentFolder.onOpen}
               onDragOver={(event) => {
-                if (!parentFolder.onDrop || draggingId === null) return;
+                if (!parentFolder.onDrop || draggingIds.size === 0) return;
                 event.preventDefault();
                 event.dataTransfer.dropEffect = "move";
                 setOverParent(true);
@@ -174,21 +229,22 @@ export function FileBrowser({
                 setOverParent(false);
               }}
               onDrop={(event) => {
-                if (!parentFolder.onDrop || draggingId === null) return;
+                if (!parentFolder.onDrop || draggingIds.size === 0) return;
                 event.preventDefault();
                 event.stopPropagation();
 
-                const movedId = event.dataTransfer.getData(NODE_DRAG_TYPE);
-                const moved = items.find((item) => item.id === movedId);
-                setDraggingId(null);
-                setOverParent(false);
-                if (moved) parentFolder.onDrop(moved);
+                const moved = items.filter((item) => draggingIds.has(item.id));
+                endDrag();
+                if (moved.length > 0) parentFolder.onDrop(moved);
               }}
               className={cn(
                 "cursor-pointer",
                 overParent && "bg-accent outline-primary -outline-offset-2 outline-2",
               )}
             >
+              {/* Nothing to select: this row stands for the folder above, and
+                  a folder cannot be moved or deleted from inside itself. */}
+              {selection && <TableCell />}
               <TableCell className="w-full max-w-0">
                 <span className="text-muted-foreground flex min-w-0 items-center gap-2">
                   <CornerLeftUpIcon className="size-4 shrink-0" />
@@ -203,17 +259,21 @@ export function FileBrowser({
           {items.map((node) => (
             <TableRow
               key={node.id}
+              data-state={selection?.has(node.id) ? "selected" : undefined}
               draggable={isDraggable}
               onDragStart={(event) => {
-                setDraggingId(node.id);
+                const dragged = dragPayload(node);
+                setDraggingIds(new Set(dragged.map((item) => item.id)));
                 event.dataTransfer.effectAllowed = "move";
-                event.dataTransfer.setData(NODE_DRAG_TYPE, node.id);
+                // Firefox refuses to start a drag without a payload, and the
+                // type is what tells a drop target this came from the table
+                // rather than the desktop.
+                event.dataTransfer.setData(
+                  NODE_DRAG_TYPE,
+                  dragged.map((item) => item.id).join(","),
+                );
               }}
-              onDragEnd={() => {
-                setDraggingId(null);
-                setDropTargetId(null);
-                setOverParent(false);
-              }}
+              onDragEnd={endDrag}
               onDragOver={(event) => {
                 if (!canDropOn(node)) return;
                 // Both of these are required for the row to accept a drop at
@@ -238,18 +298,31 @@ export function FileBrowser({
                 // Keep it from reaching the upload dropzone wrapping the table.
                 event.stopPropagation();
 
-                const movedId = event.dataTransfer.getData(NODE_DRAG_TYPE);
-                const moved = items.find((item) => item.id === movedId);
-                setDraggingId(null);
-                setDropTargetId(null);
-                if (moved) onMoveNode?.(moved, node);
+                const moved = items.filter((item) => draggingIds.has(item.id));
+                endDrag();
+                if (moved.length > 0) onMoveNodes?.(moved, node);
               }}
               className={cn(
-                draggingId === node.id && "opacity-40",
+                draggingIds.has(node.id) && "opacity-40",
                 dropTargetId === node.id &&
                   "bg-accent outline-primary -outline-offset-2 outline-2",
               )}
             >
+              {selection && (
+                <TableCell className="pl-4">
+                  <Checkbox
+                    checked={selection.has(node.id)}
+                    onCheckedChange={(_checked, details) =>
+                      selection.toggle(
+                        node,
+                        details.event instanceof MouseEvent &&
+                          details.event.shiftKey,
+                      )
+                    }
+                    aria-label={`Select ${node.name}`}
+                  />
+                </TableCell>
+              )}
               {/* max-w-0 with w-full is what lets the cell's content truncate
                   instead of forcing the table wider than its container. */}
               <TableCell className="w-full max-w-0">

@@ -35,6 +35,10 @@ Everything listed here is implemented and reachable from the UI.
   "Keep both"
 - Delete with a confirmation that states exactly what goes: how many folders and
   files, and how much data
+- Tick rows (shift-click for a range, or the header box for everything listed)
+  to move or delete them together; dragging any ticked row carries the whole
+  selection. A batch is one transaction, so a name clash in the target leaves
+  every item where it was and offers "Keep both" for all of them at once
 - In-browser PDF viewer with version history, plus an escape hatch to open in a
   new tab
 - Search by name across the whole data room, each result showing its path
@@ -242,6 +246,9 @@ controller hand-rolls its own check. Two rules matter more than the rest:
   that an id exists, which is exactly what unguessable ids are for.
 - A dead share link answers **410 for every reason** - revoked, deleted, or never
   real - because distinguishing them would confirm that a token was once valid.
+- A batch is checked as a unit: one id the caller does not own fails all of it,
+  with the same 404. Acting on the rest would let someone probe for other
+  people's ids by watching which part of a batch survived.
 
 Share tokens are 32 random bytes rather than the schema's cuid2 default. A link
 is a bearer credential pasted into emails and chat, and cuid2's ~124 bits sits
@@ -284,6 +291,15 @@ interesting part - the reconciliation is. `pnpm --filter api counters:check`
 recomputes every node from the tree and reports anything that disagrees;
 `rebuildSubtreeCounters` repairs it. That check is how the counters are tested,
 and in production it is what a nightly job would run.
+
+Bulk operations adjust each chain once for the whole batch rather than once per
+item, which is sound because the deltas add: a selection is one folder's worth
+of siblings, and they share every ancestor above it. That shortcut is also the
+reason `POST /nodes/move` and `POST /nodes/delete` refuse a selection holding
+both a folder and something inside it - the inner item's bytes are already
+counted inside the outer one's totals, so adding both would count them twice.
+No UI can produce such a selection, since ticking happens within one listing,
+but the rule is enforced rather than assumed.
 
 A **closure table** is the other way to make subtree aggregates cheap - one
 indexed scan, no drift - but it rewrites a row per ancestor-descendant pair on
@@ -328,10 +344,13 @@ component with actions passed in.
 
 ## Testing
 
-- **Vitest** covers the two services where a mistake would be quiet rather than
-  loud: the suffixing rules that decide what an uploaded file ends up called, and
-  the access matrix behind every share link. Both construct the service directly
-  with a stubbed client, so the suite needs no database.
+- **Vitest** covers the places where a mistake would be quiet rather than loud:
+  the suffixing rules that decide what an uploaded file ends up called, the
+  access matrix behind every share link, and the subtree delta arithmetic that
+  lets a bulk operation adjust a folder once instead of once per item. Each
+  constructs its subject directly with a stubbed client, so the suite needs no
+  database. The counters themselves are checked against the tree by
+  `counters:check` rather than by a unit test - see above.
 - **Playwright** covers the one path that has to work end to end: register,
   create a folder, upload, rename, share, open the link from a second browser
   context as an outsider would, revoke, and confirm the link is closed off.

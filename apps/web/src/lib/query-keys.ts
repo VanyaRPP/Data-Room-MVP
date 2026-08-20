@@ -7,6 +7,8 @@ export interface ChildrenView {
   q?: string;
 }
 
+const DELETE_PREVIEWS = ["delete-preview"] as const;
+
 /**
  * Every query key in one place, so cache invalidation after a mutation can
  * never silently miss a cache because two call sites spelled the key
@@ -25,7 +27,15 @@ export const queryKeys = {
       ? (["children", folderId, view] as const)
       : (["children", folderId] as const),
   breadcrumbs: (nodeId: string) => ["breadcrumbs", nodeId] as const,
-  deletePreview: (nodeId: string) => ["delete-preview", nodeId] as const,
+
+  /** The prefix, so a delete can clear every preview it may have invalidated. */
+  deletePreviews: DELETE_PREVIEWS,
+  /**
+   * Sorted and joined, so the same selection picked in a different order is
+   * the same cache entry rather than a second identical request.
+   */
+  deletePreview: (nodeIds: readonly string[]) =>
+    [...DELETE_PREVIEWS, [...nodeIds].sort().join(",")] as const,
   fileUrl: (fileId: string, version?: number) =>
     version === undefined
       ? (["file-url", fileId] as const)

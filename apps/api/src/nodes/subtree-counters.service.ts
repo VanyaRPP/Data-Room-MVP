@@ -46,6 +46,25 @@ export function negate(delta: SubtreeDelta): SubtreeDelta {
 }
 
 /**
+ * Deltas add, which is what lets a bulk move adjust a folder once for the
+ * whole batch instead of once per item: applying the sum up a chain and
+ * applying each part in turn leave the totals in the same place.
+ */
+export function addDeltas(a: SubtreeDelta, b: SubtreeDelta): SubtreeDelta {
+  return {
+    bytes: a.bytes + b.bytes,
+    files: a.files + b.files,
+    folders: a.folders + b.folders,
+  };
+}
+
+export function sumDeltas(deltas: Iterable<SubtreeDelta>): SubtreeDelta {
+  let total = NO_DELTA;
+  for (const delta of deltas) total = addDeltas(total, delta);
+  return total;
+}
+
+/**
  * Keeps each folder's running totals for the subtree beneath it.
  *
  * These exist so a listing can show a folder's size without running a

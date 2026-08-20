@@ -16,6 +16,11 @@ interface ConflictRow {
   type: NodeType;
 }
 
+interface TakenNameRow {
+  name: string;
+  type: NodeType;
+}
+
 export interface NameConflict {
   id: string;
   type: NodeType;
@@ -84,6 +89,30 @@ export class NameConflictService {
     `;
 
     return rows[0] ?? null;
+  }
+
+  /**
+   * Which of these names the folder already uses, and for what kind of node.
+   *
+   * One query for the whole batch, so a bulk move can name every clash at
+   * once instead of refusing one item at a time. Keyed by the lowercased name,
+   * because that is what `node_parent_name_ci` compares.
+   */
+  async findTakenNames(
+    parentId: string,
+    names: string[],
+  ): Promise<Map<string, NodeType>> {
+    const wanted = [...new Set(names.map((name) => name.toLowerCase()))];
+    if (wanted.length === 0) return new Map();
+
+    const rows = await this.prisma.$queryRaw<TakenNameRow[]>`
+      SELECT lower("name") AS "name", "type"
+      FROM "Node"
+      WHERE "parentId" = ${parentId}
+        AND lower("name") IN (${Prisma.join(wanted)})
+    `;
+
+    return new Map(rows.map((row) => [row.name, row.type]));
   }
 
   /**

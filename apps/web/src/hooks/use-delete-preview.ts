@@ -4,14 +4,19 @@ import { apiFetch } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
 
 /**
- * What a delete would remove. Only fetched while the confirmation dialog is
- * open - it walks the whole subtree, so it isn't worth doing speculatively.
+ * What deleting this selection would remove. Only fetched while the
+ * confirmation dialog is open - it walks every subtree involved, so it isn't
+ * worth doing speculatively.
  */
-export function useDeletePreview(nodeId: string | null) {
+export function useDeletePreview(nodeIds: string[]) {
   return useQuery({
-    queryKey: queryKeys.deletePreview(nodeId ?? ""),
-    queryFn: () => apiFetch<DeletePreviewDto>(`/nodes/${nodeId}/delete-preview`),
-    enabled: nodeId !== null,
+    queryKey: queryKeys.deletePreview(nodeIds),
+    queryFn: () =>
+      apiFetch<DeletePreviewDto>("/nodes/delete-preview", {
+        method: "POST",
+        body: { nodeIds },
+      }),
+    enabled: nodeIds.length > 0,
     staleTime: 0,
   });
 }

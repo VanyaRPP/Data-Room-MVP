@@ -21,5 +21,13 @@ export const MAX_PAGE_SIZE = 100;
 /** How many matches the search box previews while typing. */
 export const SEARCH_SUGGESTION_LIMIT = 6;
 
+/**
+ * How many items one bulk move or delete may carry.
+ *
+ * A batch runs as a single transaction, so this is what bounds how long a
+ * request can hold write locks on a branch of the tree.
+ */
+export const MAX_NODES_PER_BATCH = 100;
+
 /** Session cookie name, shared so the web app can reference it (e.g. middleware). */
 export const SESSION_COOKIE_NAME = "dr_session";

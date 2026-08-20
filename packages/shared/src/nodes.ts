@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { nodeNameSchema, paginationQuerySchema } from "./common";
-import { NODE_NAME_MAX_LENGTH } from "./constants";
+import { MAX_NODES_PER_BATCH, NODE_NAME_MAX_LENGTH } from "./constants";
 
 export const nodeTypeSchema = z.enum(["FOLDER", "FILE"]);
 export type NodeType = z.infer<typeof nodeTypeSchema>;
@@ -105,8 +105,32 @@ export const moveNodeSchema = z.strictObject({
 export type MoveNodeInput = z.infer<typeof moveNodeSchema>;
 
 /**
- * What a delete would remove, counted over the whole subtree including the
- * node itself, so the confirmation dialog can state real numbers.
+ * The items a bulk operation applies to.
+ *
+ * Capped because the whole batch is one transaction - see MAX_NODES_PER_BATCH.
+ * Duplicates are harmless: the server works from the distinct set.
+ */
+export const nodeIdsSchema = z
+  .array(z.uuid())
+  .min(1)
+  .max(MAX_NODES_PER_BATCH);
+
+/** Bulk move: the same options as a single move, over a list of items. */
+export const moveNodesSchema = moveNodeSchema.extend({
+  nodeIds: nodeIdsSchema,
+});
+
+export type MoveNodesInput = z.infer<typeof moveNodesSchema>;
+
+/** What both bulk delete and its preview take. */
+export const nodeBatchSchema = z.strictObject({ nodeIds: nodeIdsSchema });
+
+export type NodeBatchInput = z.infer<typeof nodeBatchSchema>;
+
+/**
+ * What a delete would remove, counted over every selected subtree including
+ * the selected nodes themselves, so the confirmation dialog can state real
+ * numbers rather than a vague warning.
  */
 export const deletePreviewDtoSchema = z.strictObject({
   folders: z.number().int().nonnegative(),

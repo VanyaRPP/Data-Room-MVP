@@ -26,6 +26,7 @@ import {
 } from "@/components/browser/file-browser";
 import { FolderPeek } from "@/components/browser/folder-peek";
 import { PathBreadcrumbs } from "@/components/browser/path-breadcrumbs";
+import { SelectionToolbar } from "@/components/browser/selection-toolbar";
 import { DeleteConfirmDialog } from "@/components/dialogs/delete-confirm-dialog";
 import { MoveDialog } from "@/components/dialogs/move-dialog";
 import { NewFolderDialog } from "@/components/dialogs/new-folder-dialog";
@@ -39,18 +40,24 @@ import { UploadDropzone } from "@/components/upload/upload-dropzone";
 import { useBreadcrumbs } from "@/hooks/use-breadcrumbs";
 import { useChildren } from "@/hooks/use-children";
 import { useDebounced } from "@/hooks/use-debounced";
-import { useMoveNode } from "@/hooks/use-node-mutations";
+import { useMoveNodes } from "@/hooks/use-node-mutations";
+import { useNodeSelection } from "@/hooks/use-node-selection";
 import { useRooms } from "@/hooks/use-rooms";
 import { ApiError } from "@/lib/api";
 import { useBrowserView } from "@/lib/browser-view-store";
+
+/** A stable empty array, so a closed dialog is not a new prop every render. */
+const NOTHING: NodeDto[] = [];
 
 export function RoomBrowser({ folderId }: { folderId: string }) {
   const router = useRouter();
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [renameTarget, setRenameTarget] = useState<NodeDto | null>(null);
-  const [moveTarget, setMoveTarget] = useState<NodeDto | null>(null);
   const [shareTarget, setShareTarget] = useState<ShareTarget | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<NodeDto | null>(null);
+  // Both dialogs take a list, so one row and a whole selection open the same
+  // dialog and take the same path to the server.
+  const [moveTargets, setMoveTargets] = useState<NodeDto[]>(NOTHING);
+  const [deleteTargets, setDeleteTargets] = useState<NodeDto[]>(NOTHING);
 
   // The sort is a preference, so it lives outside this component and survives
   // the remount that navigating to another folder causes. The filters describe
@@ -72,7 +79,7 @@ export function RoomBrowser({ folderId }: { folderId: string }) {
   const breadcrumbs = useBreadcrumbs(folderId);
   const rooms = useRooms();
 
-  const moveByDrag = useMoveNode(folderId);
+  const moveByDrag = useMoveNodes(folderId);
   const rootId = rooms.data?.[0]?.rootNodeId ?? null;
   const childrenError = children.error;
 
@@ -92,6 +99,12 @@ export function RoomBrowser({ folderId }: { folderId: string }) {
   const items = children.data?.pages.flatMap((page) => page.items) ?? [];
   const isFiltered = typeFilter !== undefined || filterQuery.length > 0;
 
+  // Scoped to the folder, and narrowed to what is on screen: a bulk action can
+  // only ever reach rows the user can see. Items that leave the listing - moved
+  // away, deleted, filtered out - leave the selection with it, so nothing has
+  // to be cleared by hand once an operation succeeds.
+  const selection = useNodeSelection(items, folderId);
+
   // Second from the end of the trail: the folder containing this one. Absent
   // at the room root, which has nowhere to go up to.
   const trail = breadcrumbs.data;
@@ -99,28 +112,34 @@ export function RoomBrowser({ folderId }: { folderId: string }) {
   const current = trail?.[trail.length - 1] ?? null;
 
   /**
-   * Dropping a row onto a folder row moves it there.
+   * Dropping rows onto a folder row moves them there. Dragging a row that is
+   * part of the selection brings the whole selection along - see FileBrowser.
    *
    * A name clash cannot open a dialog here without throwing away the gesture
    * the user just made, so the offer to keep both rides along on the toast.
    */
-  function handleDragMove(node: NodeDto, target: FolderTarget): void {
+  function handleDragMove(nodes: NodeDto[], target: FolderTarget): void {
+    const [only] = nodes;
+
     const run = (onConflict: "fail" | "rename"): void => {
       moveByDrag.mutate(
-        { nodeId: node.id, targetFolderId: target.id, onConflict },
+        {
+          nodeIds: nodes.map((node) => node.id),
+          targetFolderId: target.id,
+          onConflict,
+        },
         {
           onSuccess: (moved) => {
-            toast.success(
-              moved.name === node.name
-                ? `Moved "${moved.name}" to "${target.name}"`
-                : `Moved to "${target.name}" as "${moved.name}"`,
-            );
+            toast.success(describeDrop(nodes, moved, target.name));
           },
           onError: (error) => {
             if (error instanceof ApiError && error.status === 409) {
-              toast.error(`"${node.name}" already exists in "${target.name}"`, {
-                action: { label: "Keep both", onClick: () => run("rename") },
-              });
+              toast.error(
+                only && nodes.length === 1
+                  ? `"${only.name}" already exists in "${target.name}"`
+                  : error.message,
+                { action: { label: "Keep both", onClick: () => run("rename") } },
+              );
               return;
             }
             toast.error(error.message);
@@ -203,7 +222,8 @@ export function RoomBrowser({ folderId }: { folderId: string }) {
             hasNextPage={children.hasNextPage}
             isFetchingNextPage={children.isFetchingNextPage}
             onLoadMore={() => void children.fetchNextPage()}
-            onMoveNode={handleDragMove}
+            onMoveNodes={handleDragMove}
+            selection={selection}
             sorting={{ sort, direction, onSort: handleSort }}
             parentFolder={
               parent
@@ -211,7 +231,7 @@ export function RoomBrowser({ folderId }: { folderId: string }) {
                     id: parent.id,
                     name: parent.name,
                     onOpen: () => router.push(`/room/${parent.id}`),
-                    onDrop: (node) => handleDragMove(node, parent),
+                    onDrop: (nodes) => handleDragMove(nodes, parent),
                   }
                 : null
             }
@@ -275,7 +295,10 @@ export function RoomBrowser({ folderId }: { folderId: string }) {
                   <DropdownMenuItem onClick={() => setRenameTarget(node)}>
                     Rename
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setMoveTarget(node)}>
+                  {/* The row menu acts on its own row even when others are
+                      ticked: it is labelled for this item, and Rename and
+                      Share have no meaning spread across a selection. */}
+                  <DropdownMenuItem onClick={() => setMoveTargets([node])}>
                     Move
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setShareTarget(node)}>
@@ -283,7 +306,7 @@ export function RoomBrowser({ folderId }: { folderId: string }) {
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     variant="destructive"
-                    onClick={() => setDeleteTarget(node)}
+                    onClick={() => setDeleteTargets([node])}
                   >
                     Delete
                   </DropdownMenuItem>
@@ -307,10 +330,10 @@ export function RoomBrowser({ folderId }: { folderId: string }) {
         }}
       />
       <MoveDialog
-        node={moveTarget}
+        nodes={moveTargets}
         folderId={folderId}
         onOpenChange={(open) => {
-          if (!open) setMoveTarget(null);
+          if (!open) setMoveTargets(NOTHING);
         }}
       />
       <ShareDialog
@@ -320,12 +343,45 @@ export function RoomBrowser({ folderId }: { folderId: string }) {
         }}
       />
       <DeleteConfirmDialog
-        node={deleteTarget}
+        nodes={deleteTargets}
         folderId={folderId}
         onOpenChange={(open) => {
-          if (!open) setDeleteTarget(null);
+          if (!open) setDeleteTargets(NOTHING);
         }}
+      />
+
+      <SelectionToolbar
+        nodes={selection.nodes}
+        onMove={() => setMoveTargets(selection.nodes)}
+        onDelete={() => setDeleteTargets(selection.nodes)}
+        onClear={selection.clear}
       />
     </div>
   );
+}
+
+/**
+ * What a drag-and-drop move did, naming the destination - the whole point of
+ * the gesture was to put things somewhere, so the confirmation should say
+ * where. Auto-suffixed names are called out; unchanged ones are not worth a
+ * mention.
+ */
+function describeDrop(
+  before: NodeDto[],
+  after: NodeDto[],
+  targetName: string,
+): string {
+  const namesBefore = new Map(before.map((node) => [node.id, node.name]));
+  const renamed = after.filter((node) => namesBefore.get(node.id) !== node.name);
+
+  const [only] = after;
+  if (after.length === 1 && only) {
+    return renamed.length === 0
+      ? `Moved “${only.name}” to “${targetName}”`
+      : `Moved to “${targetName}” as “${only.name}”`;
+  }
+
+  return renamed.length === 0
+    ? `Moved ${after.length} items to “${targetName}”`
+    : `Moved ${after.length} items to “${targetName}”, renaming ${renamed.length}`;
 }

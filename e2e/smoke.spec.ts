@@ -5,7 +5,7 @@ const SAMPLE_PDF = join(__dirname, "fixtures", "sample.pdf");
 
 /**
  * The one path that has to work: sign up, put a document somewhere, share it,
- * and take the sharing back.
+ * take the sharing back, and clear up in bulk.
  *
  * A fresh account per run keeps this independent of whatever the database
  * already holds, and the shared link is opened in a second browser context so
@@ -94,6 +94,33 @@ test("a new user can organise, share and unshare a document", async ({
   });
 
   await visitor.close();
+
+  await test.step("tick several rows and clear them out in one go", async () => {
+    // The share dialog is still open from revoking the link.
+    await page.keyboard.press("Escape");
+
+    for (const name of ["Archive", "Scratch"]) {
+      await page.getByRole("button", { name: "New folder" }).first().click();
+      await page.getByLabel("Name", { exact: true }).fill(name);
+      await page.getByRole("button", { name: "Create folder" }).click();
+      await expect(row(page, name)).toBeVisible();
+    }
+
+    await page.getByRole("checkbox", { name: "Select Archive" }).click();
+    await page.getByRole("checkbox", { name: "Select Scratch" }).click();
+    await expect(page.getByText("2 selected")).toBeVisible();
+
+    await page.getByRole("button", { name: "Delete" }).click();
+    const confirm = page.getByRole("alertdialog");
+    await expect(confirm.getByText("Delete 2 items?")).toBeVisible();
+    await confirm.getByRole("button", { name: "Delete" }).click();
+
+    await expect(page.getByText("Deleted 2 items")).toBeVisible();
+    // The shared folder is untouched: only what was ticked went.
+    await expect(row(page, "Due Diligence")).toBeVisible();
+    await expect(row(page, "Archive")).toHaveCount(0);
+    await expect(row(page, "Scratch")).toHaveCount(0);
+  });
 });
 
 /**
