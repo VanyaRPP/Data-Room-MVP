@@ -49,31 +49,36 @@ Everything listed here is implemented and reachable from the UI.
 
 ## Setup locally
 
-Prerequisites: Node 22+, [pnpm](https://pnpm.io) (`corepack enable`), Docker
-Desktop, and a free [Supabase](https://supabase.com) project for file storage.
+Prerequisites: Node 22+, [pnpm](https://pnpm.io) (`corepack enable`), and a free
+[Supabase](https://supabase.com) project, which provides both the database and
+the file storage.
+
+In the Supabase project, before starting:
+
+1. **Storage** → create a bucket named `dataroom-dev`, with **Public disabled**.
+2. **Connect** → **ORMs** → **Prisma** → copy `DATABASE_URL` and `DIRECT_URL`.
+3. **Project Settings** → **API Keys** → copy the project URL and the **secret**
+   key. The publishable key cannot sign uploads for a private bucket.
 
 ```bash
-# 1. Start local Postgres
-docker compose up -d
-
-# 2. Install dependencies
+# 1. Install dependencies
 pnpm install
 
-# 3. Copy env files and fill in the blanks (see the comments in each file)
+# 2. Copy env files and fill in the values above (see the comments in each file)
 cp apps/api/.env.example apps/api/.env
 cp apps/web/.env.example apps/web/.env.local
 
-# 4. Create the schema and load demo data
+# 3. Create the schema and load demo data
 pnpm --filter api db:migrate
 pnpm --filter api db:seed
 
-# 5. Run both apps
+# 4. Run both apps
 pnpm dev
 ```
 
-In Supabase, create a **private** storage bucket named `dataroom-dev`, then put
-its project URL and **secret** key into `apps/api/.env`. The publishable key
-cannot sign uploads for a private bucket.
+Prefer a local database? `docker compose up -d` starts Postgres 16 on port 5432;
+point both `DATABASE_URL` and `DIRECT_URL` at it (the commented-out lines in
+`.env.example`). Storage still needs the Supabase bucket either way.
 
 - Web: http://localhost:3000
 - API: http://localhost:4000, reached from the browser through `/api/*`
