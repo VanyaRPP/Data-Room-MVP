@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { FileTextIcon, FolderIcon } from "lucide-react";
 import type { NodeDto } from "@dataroom/shared";
 import { Button } from "@/components/ui/button";
@@ -41,7 +41,15 @@ interface FileBrowserProps {
    * would still advertise operations that aren't on offer.
    */
   renderRowActions?: (node: NodeDto) => ReactNode;
+  /**
+   * Enables dragging a row onto a folder row to move it there. Undefined on
+   * read-only views, which makes every row undraggable.
+   */
+  onMoveNode?: (node: NodeDto, targetFolder: NodeDto) => void;
 }
+
+/** Marks a drag as coming from inside the table rather than the desktop. */
+const NODE_DRAG_TYPE = "application/x-dataroom-node";
 
 export function FileBrowser({
   items,
@@ -55,7 +63,24 @@ export function FileBrowser({
   isFetchingNextPage,
   onLoadMore,
   renderRowActions,
+  onMoveNode,
 }: FileBrowserProps) {
+  // The id being dragged, so a folder can tell whether it is a legal target
+  // for it. dataTransfer's payload is deliberately unreadable during dragover,
+  // so the only way to know is to remember what the drag started with.
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+
+  const isDraggable = onMoveNode !== undefined;
+
+  function canDropOn(node: NodeDto): boolean {
+    return (
+      isDraggable &&
+      node.type === "FOLDER" &&
+      draggingId !== null &&
+      draggingId !== node.id
+    );
+  }
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
@@ -90,7 +115,54 @@ export function FileBrowser({
         </TableHeader>
         <TableBody>
           {items.map((node) => (
-            <TableRow key={node.id}>
+            <TableRow
+              key={node.id}
+              draggable={isDraggable}
+              onDragStart={(event) => {
+                setDraggingId(node.id);
+                event.dataTransfer.effectAllowed = "move";
+                event.dataTransfer.setData(NODE_DRAG_TYPE, node.id);
+              }}
+              onDragEnd={() => {
+                setDraggingId(null);
+                setDropTargetId(null);
+              }}
+              onDragOver={(event) => {
+                if (!canDropOn(node)) return;
+                // Both of these are required for the row to accept a drop at
+                // all, and preventing default is what turns the cursor into a
+                // move affordance instead of the "no entry" sign.
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+                setDropTargetId(node.id);
+              }}
+              onDragLeave={(event) => {
+                // Ignore the events fired while crossing the row's own cells.
+                if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                  return;
+                }
+                setDropTargetId((current) =>
+                  current === node.id ? null : current,
+                );
+              }}
+              onDrop={(event) => {
+                if (!canDropOn(node)) return;
+                event.preventDefault();
+                // Keep it from reaching the upload dropzone wrapping the table.
+                event.stopPropagation();
+
+                const movedId = event.dataTransfer.getData(NODE_DRAG_TYPE);
+                const moved = items.find((item) => item.id === movedId);
+                setDraggingId(null);
+                setDropTargetId(null);
+                if (moved) onMoveNode?.(moved, node);
+              }}
+              className={cn(
+                draggingId === node.id && "opacity-40",
+                dropTargetId === node.id &&
+                  "bg-accent outline-primary -outline-offset-2 outline-2",
+              )}
+            >
               {/* max-w-0 with w-full is what lets the cell's content truncate
                   instead of forcing the table wider than its container. */}
               <TableCell className="w-full max-w-0">

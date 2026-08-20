@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { useMe } from "@/hooks/use-me";
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
@@ -17,7 +18,10 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   }, [me, router]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
+    <div className="relative flex min-h-screen items-center justify-center px-4">
+      <div className="absolute top-3 right-4">
+        <ThemeToggle />
+      </div>
       <div className="w-full max-w-sm">
         <h1 className="mb-6 text-center text-xl font-semibold">Data Room</h1>
         {children}

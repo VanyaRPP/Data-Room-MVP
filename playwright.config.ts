@@ -1,6 +1,9 @@
 import { defineConfig } from "@playwright/test";
 
-const WEB_URL = "http://localhost:3000";
+// Point at a deployment to smoke-test it: E2E_BASE_URL=https://... pnpm test:e2e
+// Without it the suite runs against a local dev stack it starts itself.
+const DEPLOYED_URL = process.env.E2E_BASE_URL;
+const WEB_URL = DEPLOYED_URL ?? "http://localhost:3000";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -15,14 +18,16 @@ export default defineConfig({
     baseURL: WEB_URL,
     trace: "on-first-retry",
   },
-  webServer: {
-    // Brings up the API and the web app together. A dev stack already running
-    // locally is reused rather than fought with.
-    command: "pnpm dev",
-    url: WEB_URL,
-    reuseExistingServer: !process.env.CI,
-    timeout: 180_000,
-    stdout: "ignore",
-    stderr: "pipe",
-  },
+  webServer: DEPLOYED_URL
+    ? undefined
+    : {
+        // Brings up the API and the web app together. A dev stack already
+        // running locally is reused rather than fought with.
+        command: "pnpm dev",
+        url: WEB_URL,
+        reuseExistingServer: !process.env.CI,
+        timeout: 180_000,
+        stdout: "ignore",
+        stderr: "pipe",
+      },
 });

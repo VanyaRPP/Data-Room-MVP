@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { UploadQueuePanel } from "@/components/upload/upload-queue-panel";
 import { useMe } from "@/hooks/use-me";
 import { apiFetch } from "@/lib/api";
@@ -45,19 +46,22 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             Shared with me
           </Link>
         </nav>
-        {me && (
-          <div className="flex items-center gap-3 text-sm">
-            <span className="text-muted-foreground">{me.email}</span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => logout.mutate()}
-              disabled={logout.isPending}
-            >
-              Log out
-            </Button>
-          </div>
-        )}
+        <div className="flex items-center gap-3 text-sm">
+          <ThemeToggle />
+          {me && (
+            <>
+              <span className="text-muted-foreground">{me.email}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => logout.mutate()}
+                disabled={logout.isPending}
+              >
+                Log out
+              </Button>
+            </>
+          )}
+        </div>
       </header>
       <main className="flex-1">{children}</main>
       {/* In the shell, not a page: uploads keep running as the user navigates. */}

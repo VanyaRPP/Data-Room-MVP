@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export const metadata: Metadata = {
   title: "Shared with you — Data Room",
@@ -22,7 +23,10 @@ export default function PublicLayout({
         <Link href="/" className="font-semibold">
           Data Room
         </Link>
-        <span className="text-muted-foreground text-sm">Shared with you</span>
+        <div className="flex items-center gap-3">
+          <span className="text-muted-foreground text-sm">Shared with you</span>
+          <ThemeToggle />
+        </div>
       </header>
       <main className="flex-1">{children}</main>
     </div>

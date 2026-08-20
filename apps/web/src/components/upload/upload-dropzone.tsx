@@ -36,9 +36,14 @@ export function UploadDropzone({ folderId, children }: UploadDropzoneProps) {
   }
 
   function handleDrop(event: DragEvent<HTMLDivElement>): void {
-    event.preventDefault();
     dragDepth.current = 0;
     setIsDraggingOver(false);
+
+    // Rows dragged within the table bubble up here too; those are moves, and
+    // the row that accepted the drop has already handled it.
+    if (!event.dataTransfer.types.includes("Files")) return;
+
+    event.preventDefault();
     startUploads(Array.from(event.dataTransfer.files), folderId, queryClient);
   }
 

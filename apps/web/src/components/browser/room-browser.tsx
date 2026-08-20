@@ -24,6 +24,7 @@ import { UploadButton } from "@/components/upload/upload-button";
 import { UploadDropzone } from "@/components/upload/upload-dropzone";
 import { useBreadcrumbs } from "@/hooks/use-breadcrumbs";
 import { useChildren } from "@/hooks/use-children";
+import { useMoveNode } from "@/hooks/use-node-mutations";
 import { useRooms } from "@/hooks/use-rooms";
 import { ApiError } from "@/lib/api";
 
@@ -39,6 +40,7 @@ export function RoomBrowser({ folderId }: { folderId: string }) {
   const [shareTarget, setShareTarget] = useState<NodeDto | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<NodeDto | null>(null);
 
+  const moveByDrag = useMoveNode(folderId);
   const rootId = rooms.data?.[0]?.rootNodeId ?? null;
   const childrenError = children.error;
 
@@ -56,6 +58,40 @@ export function RoomBrowser({ folderId }: { folderId: string }) {
   }, [childrenError, rootId, folderId, router]);
 
   const items = children.data?.pages.flatMap((page) => page.items) ?? [];
+
+  /**
+   * Dropping a row onto a folder row moves it there.
+   *
+   * A name clash cannot open a dialog here without throwing away the gesture
+   * the user just made, so the offer to keep both rides along on the toast.
+   */
+  function handleDragMove(node: NodeDto, target: NodeDto): void {
+    const run = (onConflict: "fail" | "rename"): void => {
+      moveByDrag.mutate(
+        { nodeId: node.id, targetFolderId: target.id, onConflict },
+        {
+          onSuccess: (moved) => {
+            toast.success(
+              moved.name === node.name
+                ? `Moved "${moved.name}" to "${target.name}"`
+                : `Moved to "${target.name}" as "${moved.name}"`,
+            );
+          },
+          onError: (error) => {
+            if (error instanceof ApiError && error.status === 409) {
+              toast.error(`"${node.name}" already exists in "${target.name}"`, {
+                action: { label: "Keep both", onClick: () => run("rename") },
+              });
+              return;
+            }
+            toast.error(error.message);
+          },
+        },
+      );
+    };
+
+    run("fail");
+  }
 
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-6">
@@ -86,6 +122,7 @@ export function RoomBrowser({ folderId }: { folderId: string }) {
             hasNextPage={children.hasNextPage}
             isFetchingNextPage={children.isFetchingNextPage}
             onLoadMore={() => void children.fetchNextPage()}
+            onMoveNode={handleDragMove}
             emptyState={
               <EmptyState
                 icon={<FolderIcon />}
