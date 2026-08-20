@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "./packages/config/tsconfig.base.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "types": ["node"],
+    "noEmit": true
+  },
+  // The end-to-end suite lives outside every workspace package, so without
+  // this it would never be type-checked at all - Playwright transpiles without
+  // checking types.
+  "include": ["e2e/**/*.ts", "playwright.config.ts"]
+}
