@@ -30,14 +30,28 @@ export interface UploadItem {
   canRetry: boolean;
 }
 
+/**
+ * Files waiting on a decision: their names are already taken in the target
+ * folder, and only the user can say whether that means a second copy or a new
+ * version of what is there.
+ */
+export interface PendingConflict {
+  itemIds: string[];
+  folderId: string;
+  taken: string[];
+}
+
 interface UploadState {
   items: UploadItem[];
   isCollapsed: boolean;
+  pendingConflict: PendingConflict | null;
   add: (items: UploadItem[]) => void;
   update: (id: string, patch: Partial<UploadItem>) => void;
+  remove: (ids: string[]) => void;
   clearFinished: () => void;
   clearAll: () => void;
   setCollapsed: (collapsed: boolean) => void;
+  setPendingConflict: (conflict: PendingConflict | null) => void;
 }
 
 /**
@@ -48,6 +62,7 @@ interface UploadState {
 export const useUploadStore = create<UploadState>((set) => ({
   items: [],
   isCollapsed: false,
+  pendingConflict: null,
 
   add: (items) =>
     set((state) => ({ items: [...state.items, ...items], isCollapsed: false })),
@@ -58,6 +73,13 @@ export const useUploadStore = create<UploadState>((set) => ({
         item.id === id ? { ...item, ...patch } : item,
       ),
     })),
+
+  remove: (ids) =>
+    set((state) => ({
+      items: state.items.filter((item) => !ids.includes(item.id)),
+    })),
+
+  setPendingConflict: (pendingConflict) => set({ pendingConflict }),
 
   clearFinished: () =>
     set((state) => ({

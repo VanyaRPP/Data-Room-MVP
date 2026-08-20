@@ -242,7 +242,11 @@ export class NodesService {
     await this.storage.removeMany(storageKeys);
   }
 
-  /** Every stored blob in this node's subtree, including its own. */
+  /**
+   * Every stored blob in this node's subtree: the current bytes of each file
+   * and every superseded version of them. Missing the archived ones would
+   * leave storage growing with history nothing can ever reach again.
+   */
   private async collectStorageKeys(nodeId: string): Promise<string[]> {
     const rows = await this.prisma.$queryRaw<{ storageKey: string }[]>`
       WITH RECURSIVE subtree AS (
@@ -255,6 +259,10 @@ export class NodesService {
         JOIN subtree s ON n."parentId" = s."id"
       )
       SELECT "storageKey" FROM subtree WHERE "storageKey" IS NOT NULL
+      UNION
+      SELECT v."storageKey"
+      FROM "FileVersion" v
+      JOIN subtree s ON v."nodeId" = s."id"
     `;
 
     return rows.map((row) => row.storageKey);

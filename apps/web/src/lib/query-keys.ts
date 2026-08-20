@@ -19,7 +19,11 @@ export const queryKeys = {
       : (["children", folderId] as const),
   breadcrumbs: (nodeId: string) => ["breadcrumbs", nodeId] as const,
   deletePreview: (nodeId: string) => ["delete-preview", nodeId] as const,
-  fileUrl: (fileId: string) => ["file-url", fileId] as const,
+  fileUrl: (fileId: string, version?: number) =>
+    version === undefined
+      ? (["file-url", fileId] as const)
+      : (["file-url", fileId, version] as const),
+  fileVersions: (fileId: string) => ["file-versions", fileId] as const,
   search: (query: string) => ["search", query] as const,
   shares: (nodeId: string) => ["shares", nodeId] as const,
   sharedWithMe: ["shared-with-me"] as const,

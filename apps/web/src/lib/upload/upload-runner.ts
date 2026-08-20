@@ -5,6 +5,8 @@ import {
   PDF_MIME_TYPE,
   type NodeDto,
   type PresignedFileDto,
+  type UploadConflictStrategy,
+  type UploadConflictsDto,
 } from "@dataroom/shared";
 import { apiFetch } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
@@ -89,8 +91,75 @@ export function startUploads(
   useUploadStore.getState().add(items);
 
   const accepted = items.filter((item) => item.status === "pending");
-  for (const batch of chunk(accepted, MAX_FILES_PER_BATCH)) {
-    void processBatch(batch, queryClient);
+  if (accepted.length === 0) return;
+
+  void beginAccepted(accepted, folderId, queryClient);
+}
+
+/**
+ * Asks the server whether any of these names is already taken before a byte
+ * moves. If so the batch waits for the user to choose; otherwise it goes
+ * straight out, suffixing around any clash that appears in the meantime.
+ */
+async function beginAccepted(
+  accepted: UploadItem[],
+  folderId: string,
+  queryClient: QueryClient,
+): Promise<void> {
+  let taken: string[] = [];
+  try {
+    const response = await apiFetch<UploadConflictsDto>("/files/conflicts", {
+      method: "POST",
+      body: { folderId, names: accepted.map((item) => item.file.name) },
+    });
+    taken = response.taken;
+  } catch {
+    // The check is a courtesy, not a gate: if it fails, fall back to the
+    // behaviour that never loses anything - keep both.
+  }
+
+  if (taken.length > 0) {
+    useUploadStore.getState().setPendingConflict({
+      itemIds: accepted.map((item) => item.id),
+      folderId,
+      taken,
+    });
+    return;
+  }
+
+  dispatch(accepted, folderId, "rename", queryClient);
+}
+
+/** Applies the user's answer to the batch that was waiting on it. */
+export function resolveUploadConflict(
+  choice: UploadConflictStrategy | "cancel",
+  queryClient: QueryClient,
+): void {
+  const store = useUploadStore.getState();
+  const pending = store.pendingConflict;
+  if (!pending) return;
+
+  store.setPendingConflict(null);
+  const waiting = store.items.filter((item) =>
+    pending.itemIds.includes(item.id),
+  );
+
+  if (choice === "cancel") {
+    store.remove(pending.itemIds);
+    return;
+  }
+
+  dispatch(waiting, pending.folderId, choice, queryClient);
+}
+
+function dispatch(
+  items: UploadItem[],
+  folderId: string,
+  onConflict: UploadConflictStrategy,
+  queryClient: QueryClient,
+): void {
+  for (const batch of chunk(items, MAX_FILES_PER_BATCH)) {
+    void processBatch(batch, folderId, onConflict, queryClient);
   }
 }
 
@@ -101,15 +170,16 @@ export function retryUpload(itemId: string, queryClient: QueryClient): void {
   if (!item?.canRetry) return;
 
   store.update(itemId, { status: "pending", progress: 0, error: null });
-  void processBatch([item], queryClient);
+  void processBatch([item], item.folderId, "rename", queryClient);
 }
 
 async function processBatch(
   items: UploadItem[],
+  folderId: string,
+  onConflict: UploadConflictStrategy,
   queryClient: QueryClient,
 ): Promise<void> {
-  const folderId = items[0]?.folderId;
-  if (folderId === undefined) return;
+  if (items.length === 0) return;
 
   const { update } = useUploadStore.getState();
   for (const item of items) update(item.id, { status: "presigning" });
@@ -120,6 +190,7 @@ async function processBatch(
       method: "POST",
       body: {
         folderId,
+        onConflict,
         files: items.map((item) => ({
           name: item.file.name,
           size: item.file.size,
@@ -182,9 +253,12 @@ async function uploadOne(
       queryKey: queryKeys.children(item.folderId),
     });
   } catch (error) {
-    // The reservation is holding this file's name. Release it, or retrying
-    // would collide with the failed attempt and land as "report (1).pdf".
-    await discardReservation(slot.nodeId);
+    // A failed *new* file is holding its name, so release it or retrying would
+    // collide with the failed attempt and land as "report (1).pdf". A failed
+    // new version holds nothing - the existing file is untouched until
+    // /complete swaps it - so deleting the node there would destroy the very
+    // file the user was replacing.
+    if (slot.action !== "versioned") await discardReservation(slot.nodeId);
     update(item.id, { status: "error", error: errorMessage(error) });
   } finally {
     releaseSlot();

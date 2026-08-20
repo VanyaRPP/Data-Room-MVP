@@ -37,6 +37,8 @@ function buildNode(overrides: Partial<OwnedNode> = {}): OwnedNode {
     mimeType: null,
     storageKey: null,
     status: null,
+    version: 1,
+    pendingStorageKey: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     room: {

@@ -7,6 +7,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { SearchBox } from "@/components/search-box";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { UploadConflictDialog } from "@/components/upload/upload-conflict-dialog";
 import { UploadQueuePanel } from "@/components/upload/upload-queue-panel";
 import { useMe } from "@/hooks/use-me";
 import { apiFetch } from "@/lib/api";
@@ -70,6 +71,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <main className="flex-1">{children}</main>
       {/* In the shell, not a page: uploads keep running as the user navigates. */}
       <UploadQueuePanel />
+      <UploadConflictDialog />
     </div>
   );
 }

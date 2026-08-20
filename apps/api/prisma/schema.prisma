@@ -72,13 +72,40 @@ model Node {
   storageKey String?     @unique
   status     FileStatus? // UPLOADING until /files/:id/complete confirms the upload, then READY
 
+  // The node always holds the *current* version, so listings need no join.
+  // Superseded versions are archived as FileVersion rows numbered 1..version-1.
+  version Int @default(1)
+  // Where a replacement version's bytes are being uploaded to. Cleared once
+  // /complete promotes them; a failed upload just leaves it to be overwritten.
+  pendingStorageKey String? @unique
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  shares Share[]
+  shares   Share[]
+  versions FileVersion[]
 
   @@index([parentId])
   @@index([roomId])
+}
+
+/// A superseded version of a file. The current one lives on Node itself, so
+/// reading a folder never joins this table; it is only consulted when someone
+/// asks for a file's history.
+model FileVersion {
+  id     String @id @default(uuid())
+  nodeId String
+  node   Node   @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  version    Int
+  size       BigInt
+  mimeType   String
+  storageKey String @unique
+
+  createdAt DateTime @default(now())
+
+  @@unique([nodeId, version])
+  @@index([nodeId])
 }
 
 enum ShareMode {
