@@ -53,13 +53,23 @@ export class StorageService {
     return { size: data.size ?? 0, contentType: data.contentType ?? null };
   }
 
+  /**
+   * A short-lived URL to read the object with.
+   *
+   * `downloadAs` switches storage from serving the bytes inline to offering
+   * them as a file with that name - the object itself is keyed by id, so
+   * without it a download would be saved as a UUID. Passing the name here is
+   * also what keeps the stored key opaque: it never appears in the URL path.
+   */
   async createViewUrl(
     storageKey: string,
     expiresInSeconds: number,
+    downloadAs?: string,
   ): Promise<string> {
     const { data, error } = await this.bucket().createSignedUrl(
       storageKey,
       expiresInSeconds,
+      downloadAs === undefined ? undefined : { download: downloadAs },
     );
 
     if (error || !data) {

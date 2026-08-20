@@ -13,10 +13,12 @@ import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   createShareSchema,
   shareDtoSchema,
+  sharedByMeItemSchema,
   sharedWithMeItemSchema,
   sharesQuerySchema,
   type CreateShareInput,
   type ShareDto,
+  type SharedByMeItem,
   type SharedWithMeItem,
   type SharesQuery,
 } from '@dataroom/shared';
@@ -92,5 +94,20 @@ export class SharesController {
   @ApiZodArrayResponse(200, sharedWithMeItemSchema, 'Shared items')
   sharedWithMe(@CurrentUser() user: RequestUser): Promise<SharedWithMeItem[]> {
     return this.sharesService.listSharedWithMe(user.id, user.email);
+  }
+
+  @Get('shared-by-me')
+  @ApiOperation({
+    summary: 'Every live link this user has handed out',
+    description:
+      'The counterpart to `GET /shares?nodeId=`, which answers "who can see ' +
+      'this item?". This answers "what have I given away?" across the whole ' +
+      'room, which is the only way to find a link on a folder buried several ' +
+      'levels down. Each item carries its path so two folders of the same ' +
+      'name are tellable apart. Revoked and expired links are omitted.',
+  })
+  @ApiZodArrayResponse(200, sharedByMeItemSchema, 'Links, newest first')
+  sharedByMe(@CurrentUser() user: RequestUser): Promise<SharedByMeItem[]> {
+    return this.sharesService.listSharedByMe(user.id);
   }
 }

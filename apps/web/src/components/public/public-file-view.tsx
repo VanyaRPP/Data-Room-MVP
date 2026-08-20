@@ -8,11 +8,13 @@ import { PathBreadcrumbs } from "@/components/browser/path-breadcrumbs";
 import { ShareGoneScreen } from "@/components/public/share-gone-screen";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DownloadButton } from "@/components/viewer/download-button";
 import {
   isGone,
   usePublicBreadcrumbs,
   usePublicFileUrl,
 } from "@/hooks/use-public";
+import { downloadPath } from "@/lib/download";
 
 export function PublicFileView({
   share,
@@ -83,15 +85,23 @@ export function PublicFileView({
               title={name}
               className="bg-muted h-full w-full rounded-xl border"
             />
-            <a
-              href={file.data.url}
-              target="_blank"
-              rel="noreferrer"
-              className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 self-start text-sm"
-            >
-              <ExternalLinkIcon className="size-3.5" />
-              Open in new tab
-            </a>
+            <div className="flex items-center gap-3">
+              <a
+                href={file.data.url}
+                target="_blank"
+                rel="noreferrer"
+                className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 text-sm"
+              >
+                <ExternalLinkIcon className="size-3.5" />
+                Open in new tab
+              </a>
+              {/* Read-only is about what a visitor may change. A document sent
+                  out for review is meant to be read, and every browser's PDF
+                  viewer has a save button of its own anyway. */}
+              <DownloadButton
+                urlPath={downloadPath.shared(share.token, fileId)}
+              />
+            </div>
           </div>
         )}
       </div>

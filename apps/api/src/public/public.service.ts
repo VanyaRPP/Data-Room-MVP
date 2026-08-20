@@ -4,6 +4,7 @@ import {
   type BreadcrumbDto,
   type ChildrenQuery,
   type FileUrlDto,
+  type FileUrlQuery,
   type NodePage,
   type PublicShareDto,
 } from '@dataroom/shared';
@@ -79,6 +80,7 @@ export class PublicService {
     token: string,
     fileId: string,
     viewer: ShareViewer,
+    query: FileUrlQuery,
   ): Promise<FileUrlDto> {
     const { node } = await this.access.requireSharedNode(token, fileId, viewer);
 
@@ -89,9 +91,13 @@ export class PublicService {
       throw new BadRequestException('This file is still uploading');
     }
 
+    // Read-only is about what a visitor may change, not what they may keep: a
+    // document shared for review is meant to be read, and every browser's PDF
+    // viewer offers a save button anyway.
     const url = await this.storage.createViewUrl(
       node.storageKey,
       VIEW_URL_TTL_SECONDS,
+      query.download ? node.name : undefined,
     );
 
     return {

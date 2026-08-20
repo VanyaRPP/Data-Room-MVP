@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   CreateShareInput,
   ShareDto,
+  SharedByMeItem,
   SharedWithMeItem,
 } from "@dataroom/shared";
 import { apiFetch } from "@/lib/api";
@@ -31,15 +32,25 @@ export function useCreateShare(nodeId: string) {
   });
 }
 
-export function useRevokeShare(nodeId: string) {
+/**
+ * `nodeId` is what to refresh afterwards. The share dialog passes the node it
+ * is open on; the "Shared by me" page has no single node in view, so it passes
+ * null and relies on the two list queries below.
+ */
+export function useRevokeShare(nodeId: string | null) {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (shareId: string) =>
       apiFetch<void>(`/shares/${shareId}/revoke`, { method: "POST" }),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.shares(nodeId) });
+      if (nodeId !== null) {
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.shares(nodeId),
+        });
+      }
       void queryClient.invalidateQueries({ queryKey: queryKeys.sharedWithMe });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.sharedByMe });
     },
   });
 }
@@ -48,5 +59,13 @@ export function useSharedWithMe() {
   return useQuery({
     queryKey: queryKeys.sharedWithMe,
     queryFn: () => apiFetch<SharedWithMeItem[]>("/shared-with-me"),
+  });
+}
+
+/** Every live link this user has handed out. */
+export function useSharedByMe() {
+  return useQuery({
+    queryKey: queryKeys.sharedByMe,
+    queryFn: () => apiFetch<SharedByMeItem[]>("/shared-by-me"),
   });
 }

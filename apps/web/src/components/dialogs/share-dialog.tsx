@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import { CheckIcon, CopyIcon, LinkIcon, UsersIcon } from "lucide-react";
 import { toast } from "sonner";
 import {
+  SHARE_EXPIRY_CHOICES,
   shareEmailSchema,
   type NodeType,
   type ShareDto,
@@ -25,6 +26,7 @@ import {
   useRevokeShare,
   useShares,
 } from "@/hooks/use-shares";
+import { formatTimeUntil } from "@/lib/format";
 
 /**
  * Anything shareable: a file, a folder, or the room's own root folder - which
@@ -111,15 +113,19 @@ function PublicLinkTab({
   const createShare = useCreateShare(nodeId);
   const revokeShare = useRevokeShare(nodeId);
   const [copied, setCopied] = useState(false);
+  const [expiresInDays, setExpiresInDays] = useState<number | null>(null);
 
   if (!share) {
     return (
-      <div className="space-y-3">
+      <div className="space-y-4">
         <p className="text-muted-foreground text-sm">
           Create a link and anyone who has it can view this, without signing in.
         </p>
+        <ExpiryChoice value={expiresInDays} onChange={setExpiresInDays} />
         <Button
-          onClick={() => createShare.mutate({ nodeId, mode: "PUBLIC" })}
+          onClick={() =>
+            createShare.mutate({ nodeId, mode: "PUBLIC", expiresInDays })
+          }
           disabled={createShare.isPending}
         >
           <LinkIcon />
@@ -155,6 +161,7 @@ function PublicLinkTab({
       <div className="flex items-center justify-between gap-3">
         <p className="text-muted-foreground text-sm">
           Anyone with this link can view.
+          {share.expiresAt && <> Expires {formatTimeUntil(share.expiresAt)}.</>}
         </p>
         <Button
           variant="destructive"
@@ -185,6 +192,7 @@ function SpecificPeopleTab({
   const revokeShare = useRevokeShare(nodeId);
   const [emails, setEmails] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [expiresInDays, setExpiresInDays] = useState<number | null>(null);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
@@ -210,7 +218,7 @@ function SpecificPeopleTab({
     }
 
     createShare.mutate(
-      { nodeId, mode: "RESTRICTED", emails: parsed },
+      { nodeId, mode: "RESTRICTED", emails: parsed, expiresInDays },
       {
         onSuccess: () => {
           toast.success(
@@ -229,6 +237,12 @@ function SpecificPeopleTab({
 
   return (
     <div className="space-y-4">
+      {/* Only while there is no share yet: after that the access is already
+          out there, and the way to take it back is Revoke. */}
+      {!share && (
+        <ExpiryChoice value={expiresInDays} onChange={setExpiresInDays} />
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-2" noValidate>
         <div className="flex items-center gap-2">
           <Input
@@ -273,6 +287,7 @@ function SpecificPeopleTab({
               <p className="text-muted-foreground text-sm">
                 {grants.length} {grants.length === 1 ? "person has" : "people have"}{" "}
                 access.
+                {share.expiresAt && <> Expires {formatTimeUntil(share.expiresAt)}.</>}
               </p>
               <Button
                 variant="destructive"
@@ -292,6 +307,48 @@ function SpecificPeopleTab({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * How long a new link should last.
+ *
+ * All the options are on screen rather than behind a dropdown: there are only
+ * four, and an expiry that has to be hunted for is one nobody sets. Shown only
+ * while the link is being created, since it is fixed once the token exists -
+ * changing it afterwards would silently alter a credential already in
+ * circulation, which is what revoking is for.
+ */
+function ExpiryChoice({
+  value,
+  onChange,
+}: {
+  value: number | null;
+  onChange: (days: number | null) => void;
+}) {
+  const options: { days: number | null; label: string }[] = [
+    ...SHARE_EXPIRY_CHOICES.map((days) => ({ days, label: `${days} days` })),
+    { days: null, label: "No expiry" },
+  ];
+
+  return (
+    <fieldset className="space-y-2">
+      <legend className="text-sm font-medium">Link expires</legend>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map((option) => (
+          <Button
+            key={option.label}
+            type="button"
+            size="xs"
+            variant={option.days === value ? "default" : "outline"}
+            aria-pressed={option.days === value}
+            onClick={() => onChange(option.days)}
+          >
+            {option.label}
+          </Button>
+        ))}
+      </div>
+    </fieldset>
   );
 }
 

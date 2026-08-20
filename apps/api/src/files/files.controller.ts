@@ -8,11 +8,13 @@ import {
   ParseIntPipe,
   ParseUUIDPipe,
   Post,
+  Query,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   apiErrorShape,
   fileUrlDtoSchema,
+  fileUrlQuerySchema,
   fileVersionDtoSchema,
   nodeDtoSchema,
   presignSchema,
@@ -20,6 +22,7 @@ import {
   uploadConflictsDtoSchema,
   uploadConflictsSchema,
   type FileUrlDto,
+  type FileUrlQuery,
   type FileVersionDto,
   type NodeDto,
   type PresignInput,
@@ -30,6 +33,7 @@ import {
 import {
   ApiZodArrayResponse,
   ApiZodBody,
+  ApiZodQuery,
   ApiZodResponse,
 } from '../common/api-docs';
 import { zodPipe } from '../common/zod-validation.pipe';
@@ -87,15 +91,20 @@ export class FilesController {
 
   @Get(':id/url')
   @ApiOperation({
-    summary: 'A short-lived URL for viewing the file',
-    description: 'Valid for ten minutes, served inline rather than downloaded.',
+    summary: 'A short-lived URL for viewing or downloading the file',
+    description:
+      'Valid for ten minutes and served inline by default. `download=true` ' +
+      'asks storage to offer it as a file named after the node, since the ' +
+      'stored object is keyed by id and would otherwise save as a UUID.',
   })
+  @ApiZodQuery(fileUrlQuerySchema)
   @ApiZodResponse(200, fileUrlDtoSchema, 'Signed URL and its expiry')
   url(
     @Param('id', ParseUUIDPipe) id: string,
+    @Query(zodPipe(fileUrlQuerySchema)) query: FileUrlQuery,
     @CurrentUser() user: RequestUser,
   ): Promise<FileUrlDto> {
-    return this.filesService.createViewUrl(id, user.id);
+    return this.filesService.createViewUrl(id, user.id, query);
   }
 
   @Post('conflicts')
@@ -129,14 +138,21 @@ export class FilesController {
   }
 
   @Get(':id/versions/:version/url')
-  @ApiOperation({ summary: 'A short-lived URL for one specific version' })
+  @ApiOperation({
+    summary: 'A short-lived URL for one specific version',
+    description:
+      'With `download=true` the saved copy is named `report (v2).pdf`, since ' +
+      'every version of a file shares one name.',
+  })
+  @ApiZodQuery(fileUrlQuerySchema)
   @ApiZodResponse(200, fileUrlDtoSchema, 'Signed URL and its expiry')
   @ApiZodResponse(404, apiErrorShape, 'No such version')
   versionUrl(
     @Param('id', ParseUUIDPipe) id: string,
     @Param('version', ParseIntPipe) version: number,
+    @Query(zodPipe(fileUrlQuerySchema)) query: FileUrlQuery,
     @CurrentUser() user: RequestUser,
   ): Promise<FileUrlDto> {
-    return this.filesService.createVersionUrl(id, version, user.id);
+    return this.filesService.createVersionUrl(id, version, user.id, query);
   }
 }

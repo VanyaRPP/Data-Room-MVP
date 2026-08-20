@@ -41,6 +41,8 @@ Everything listed here is implemented and reachable from the UI.
   every item where it was and offers "Keep both" for all of them at once
 - In-browser PDF viewer with version history, plus an escape hatch to open in a
   new tab
+- Download, from the viewer or straight from a row. Downloading while looking at
+  an older version saves that version, named `report (v2).pdf`
 - Search by name across the whole data room, each result showing its path
 - Cursor-paginated listings, folders before files, then by name
 - Any level of the trail can be peeked at from the breadcrumbs without
@@ -51,16 +53,26 @@ Everything listed here is implemented and reachable from the UI.
 - Public links: anyone holding the link can view, no account needed
 - Per-person grants by email address, which work even if the recipient has no
   account yet and resolve the moment they register
-- A "Shared with me" view of everything other people have shared
+- An optional expiry — 7, 30 or 90 days — enforced at read time, so a link
+  stops working the moment it is due whether or not anything has swept for it
+- A "Shared with me" view of everything other people have shared, and a
+  "Shared by me" view of every link you have handed out, with its path, who
+  can see it, when it lapses, and a way to withdraw it
 - Revoke, after which the link answers 410 and the visitor sees a plain
-  explanation rather than a broken page
+  explanation rather than a broken page — including the visitor who already had
+  it open, since the share view re-checks the token while it is on screen
 - Every shared view is strictly read-only: mutation controls are absent, not
-  disabled
+  disabled. Downloading is not a mutation, so recipients can save what they
+  were sent
 
 **Accounts and interface**
 - Email/password with argon2id, JWT in an httpOnly cookie, rate-limited auth
   endpoints
+- Rename the data room itself — the room row and its root folder move together,
+  since they are one thing to anyone looking at the trail
 - Light and dark themes, following the system until told otherwise
+- Usable on a phone: labels fold back to their icons rather than pushing the
+  page sideways
 - An OpenAPI reference at `/docs`, generated from the same schemas that
   validate the requests
 
@@ -244,8 +256,10 @@ controller hand-rolls its own check. Two rules matter more than the rest:
 
 - A node owned by someone else answers **404, never 403**. A 403 would confirm
   that an id exists, which is exactly what unguessable ids are for.
-- A dead share link answers **410 for every reason** - revoked, deleted, or never
-  real - because distinguishing them would confirm that a token was once valid.
+- A dead share link answers **410 for every reason** - revoked, expired, deleted,
+  or never real - because distinguishing them would confirm that a token was
+  once valid. Expiry is a comparison at read time rather than a column some job
+  flips, so a link dies on schedule even if nothing has run.
 - A batch is checked as a unit: one id the caller does not own fails all of it,
   with the same 404. Acting on the rest would let someone probe for other
   people's ids by watching which part of a batch survived.

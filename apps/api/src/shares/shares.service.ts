@@ -1,16 +1,23 @@
 import { randomBytes } from 'node:crypto';
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import type { Share, ShareGrant } from '@prisma/client';
 import type {
   CreateShareInput,
   ShareDto,
+  SharedByMeItem,
   SharedWithMeItem,
 } from '@dataroom/shared';
 import { PrismaService } from '../prisma/prisma.service';
-import { AccessService } from '../access/access.service';
+import { AccessService, isLive } from '../access/access.service';
 import { toNodeDto, type NodeRowShape } from '../nodes/node-dto';
 
 type ShareWithGrants = Share & { grants: ShareGrant[] };
+
+interface PathRow {
+  startId: string;
+  names: string[];
+}
 
 /**
  * 32 random bytes, URL-safe. A share link is a bearer credential handed out in
@@ -37,17 +44,21 @@ export class SharesService {
   /**
    * Creates the share, or extends the one already covering this node.
    *
-   * A node has at most one active share per mode: turning a public link on
+   * A node has at most one live share per mode: turning a public link on
    * twice returns the same link rather than quietly invalidating the one
    * already circulating, and adding people to a restricted share adds grants
-   * instead of minting a second token nobody has.
+   * instead of minting a second token nobody has. An expired link is not
+   * reused - it is dead, and reviving it would resurrect a token that has
+   * already been handed out and written off.
    */
   async create(input: CreateShareInput, userId: string): Promise<ShareDto> {
     await this.access.requireOwnedNode(input.nodeId, userId);
 
-    const existing = await this.prisma.share.findFirst({
+    const candidates = await this.prisma.share.findMany({
       where: { nodeId: input.nodeId, mode: input.mode, revokedAt: null },
+      orderBy: { createdAt: 'desc' },
     });
+    const existing = candidates.find((share) => isLive(share));
 
     const share =
       existing ??
@@ -57,6 +68,7 @@ export class SharesService {
           mode: input.mode,
           createdById: userId,
           token: generateShareToken(),
+          expiresAt: expiryFrom(input.expiresInDays),
         },
       }));
 
@@ -67,17 +79,68 @@ export class SharesService {
     return this.toShareDto(await this.withGrants(share.id));
   }
 
-  /** Active shares on a node, for its owner. */
+  /** Live shares on a node, for its owner. */
   async listForNode(nodeId: string, userId: string): Promise<ShareDto[]> {
     await this.access.requireOwnedNode(nodeId, userId);
 
     const shares = await this.prisma.share.findMany({
-      where: { nodeId, revokedAt: null },
+      where: { nodeId, revokedAt: null, ...notExpired() },
       include: { grants: true },
       orderBy: { createdAt: 'asc' },
     });
 
     return shares.map((share) => this.toShareDto(share));
+  }
+
+  /**
+   * Every live link this user has handed out, newest first.
+   *
+   * The per-node list answers "who can see this?"; this answers "what have I
+   * given away?" - which is the question an owner actually needs before a
+   * deal closes, and the only place a link on a folder buried three levels
+   * down is visible without going looking for it.
+   *
+   * The path comes from one recursive CTE across all of them rather than a
+   * breadcrumb query per row.
+   */
+  async listSharedByMe(userId: string): Promise<SharedByMeItem[]> {
+    const shares = await this.prisma.share.findMany({
+      where: { createdById: userId, revokedAt: null, ...notExpired() },
+      include: { grants: true, node: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (shares.length === 0) return [];
+
+    const paths = await this.pathsFor(shares.map((share) => share.node.id));
+
+    return shares.map((share) => ({
+      share: this.toShareDto(share),
+      node: toNodeDto(share.node),
+      path: paths.get(share.node.id) ?? [share.node.name],
+    }));
+  }
+
+  /** Root-first names for each node, in one pass up the tree. */
+  private async pathsFor(nodeIds: string[]): Promise<Map<string, string[]>> {
+    const rows = await this.prisma.$queryRaw<PathRow[]>`
+      WITH RECURSIVE ancestors AS (
+        SELECT n."id" AS "startId", n."id", n."parentId", n."name", 0 AS depth
+        FROM "Node" n
+        WHERE n."id" IN (${Prisma.join([...new Set(nodeIds)])})
+
+        UNION ALL
+
+        SELECT a."startId", p."id", p."parentId", p."name", a.depth + 1
+        FROM "Node" p
+        JOIN ancestors a ON p."id" = a."parentId"
+      )
+      SELECT "startId", array_agg("name" ORDER BY depth DESC) AS "names"
+      FROM ancestors
+      GROUP BY "startId"
+    `;
+
+    return new Map(rows.map((row) => [row.startId, row.names]));
   }
 
   /**
@@ -126,6 +189,7 @@ export class SharesService {
       JOIN "Node" n       ON n."id" = s."nodeId"
       JOIN "User" u       ON u."id" = s."createdById"
       WHERE s."revokedAt" IS NULL
+        AND (s."expiresAt" IS NULL OR s."expiresAt" > now())
         AND (g."userId" = ${userId} OR lower(g."email") = ${email.toLowerCase()})
         AND ("n"."type" = 'FOLDER' OR n."status" = 'READY')
       ORDER BY s."createdAt" DESC
@@ -176,6 +240,7 @@ export class SharesService {
       mode: share.mode,
       token: share.token,
       createdAt: share.createdAt.toISOString(),
+      expiresAt: share.expiresAt?.toISOString() ?? null,
       grants: share.grants.map((grant) => ({
         id: grant.id,
         email: grant.email,
@@ -184,4 +249,21 @@ export class SharesService {
       })),
     };
   }
+}
+
+/**
+ * The "not expired yet" half of a live share, as a Prisma filter.
+ *
+ * Paired with `revokedAt: null` at every call site rather than folded in with
+ * it, because the two are separate columns and a partial filter that silently
+ * dropped one would be invisible.
+ */
+function notExpired() {
+  return { OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] };
+}
+
+/** The deadline a request asked for, counted from now. */
+function expiryFrom(days: number | null): Date | null {
+  if (days === null) return null;
+  return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 }

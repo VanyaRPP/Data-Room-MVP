@@ -5,11 +5,13 @@ import {
   breadcrumbDtoSchema,
   childrenQuerySchema,
   fileUrlDtoSchema,
+  fileUrlQuerySchema,
   nodePageSchema,
   publicShareDtoSchema,
   type BreadcrumbDto,
   type ChildrenQuery,
   type FileUrlDto,
+  type FileUrlQuery,
   type NodePage,
   type PublicShareDto,
 } from '@dataroom/shared';
@@ -95,15 +97,22 @@ export class PublicController {
   }
 
   @Get(':token/files/:id/url')
-  @ApiOperation({ summary: 'A short-lived URL for a file inside the share' })
+  @ApiOperation({
+    summary: 'A short-lived URL for a file inside the share',
+    description:
+      'Inline by default; `download=true` offers it as a file instead. ' +
+      'Read-only governs what a visitor may change, not what they may keep.',
+  })
   @ApiParam({ name: 'id', format: 'uuid', description: 'File id' })
+  @ApiZodQuery(fileUrlQuerySchema)
   @ApiZodResponse(200, fileUrlDtoSchema, 'Signed URL and its expiry')
   fileUrl(
     @Param('token') token: string,
     @Param('id', ParseUUIDPipe) id: string,
+    @Query(zodPipe(fileUrlQuerySchema)) query: FileUrlQuery,
     @OptionalUser() user: RequestUser | undefined,
   ): Promise<FileUrlDto> {
-    return this.publicService.createViewUrl(token, id, toViewer(user));
+    return this.publicService.createViewUrl(token, id, toViewer(user), query);
   }
 }
 

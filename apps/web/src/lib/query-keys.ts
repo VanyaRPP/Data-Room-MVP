@@ -8,6 +8,7 @@ export interface ChildrenView {
 }
 
 const DELETE_PREVIEWS = ["delete-preview"] as const;
+const BREADCRUMBS = ["breadcrumbs"] as const;
 
 /**
  * Every query key in one place, so cache invalidation after a mutation can
@@ -26,7 +27,9 @@ export const queryKeys = {
     view && Object.values(view).some((value) => value !== undefined)
       ? (["children", folderId, view] as const)
       : (["children", folderId] as const),
-  breadcrumbs: (nodeId: string) => ["breadcrumbs", nodeId] as const,
+  breadcrumbs: (nodeId: string) => [...BREADCRUMBS, nodeId] as const,
+  /** The prefix: renaming the room changes the first crumb of every trail. */
+  allBreadcrumbs: BREADCRUMBS,
 
   /** The prefix, so a delete can clear every preview it may have invalidated. */
   deletePreviews: DELETE_PREVIEWS,
@@ -47,6 +50,7 @@ export const queryKeys = {
       : (["search", query, limit] as const),
   shares: (nodeId: string) => ["shares", nodeId] as const,
   sharedWithMe: ["shared-with-me"] as const,
+  sharedByMe: ["shared-by-me"] as const,
 
   /** Share-link views. Keyed by token so two open links never share a cache. */
   publicShare: (token: string) => ["public", token] as const,

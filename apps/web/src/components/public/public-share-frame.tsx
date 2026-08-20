@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { PublicShareDto } from "@dataroom/shared";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatusScreen } from "@/components/status-screen";
 import { ShareGoneScreen } from "@/components/public/share-gone-screen";
 import { isGone, usePublicShare } from "@/hooks/use-public";
 import { ApiError } from "@/lib/api";
@@ -28,7 +29,7 @@ export function PublicShareFrame({
   // link, and saying so is what tells them signing in might actually help.
   if (share.error instanceof ApiError && share.error.status === 401) {
     return (
-      <AccessNotice
+      <StatusScreen
         title="Sign in to view this"
         description="This item was shared with specific people. Sign in with the address it was sent to."
         action={
@@ -47,7 +48,7 @@ export function PublicShareFrame({
 
   if (share.error instanceof ApiError && share.error.status === 403) {
     return (
-      <AccessNotice
+      <StatusScreen
         title="You do not have access"
         description="This item was shared with specific people, and your account is not one of them. Ask the owner to share it with this address."
       />
@@ -56,7 +57,7 @@ export function PublicShareFrame({
 
   if (share.error) {
     return (
-      <AccessNotice
+      <StatusScreen
         title="Could not open this link"
         description={share.error.message}
         action={
@@ -78,24 +79,4 @@ export function PublicShareFrame({
   }
 
   return <>{children(share.data)}</>;
-}
-
-function AccessNotice({
-  title,
-  description,
-  action,
-}: {
-  title: string;
-  description: string;
-  action?: ReactNode;
-}) {
-  return (
-    <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-6 text-center">
-      <div className="space-y-1">
-        <p className="text-lg font-medium">{title}</p>
-        <p className="text-muted-foreground max-w-sm text-sm">{description}</p>
-      </div>
-      {action}
-    </div>
-  );
 }

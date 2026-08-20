@@ -10,9 +10,12 @@ import { startUploads } from "@/lib/upload/upload-runner";
 export function UploadButton({
   folderId,
   variant = "default",
+  /** Off in the toolbar, where the label folds away on a narrow screen. */
+  alwaysLabelled = true,
 }: {
   folderId: string;
   variant?: "default" | "outline";
+  alwaysLabelled?: boolean;
 }) {
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -21,7 +24,9 @@ export function UploadButton({
     <>
       <Button size="sm" variant={variant} onClick={() => inputRef.current?.click()}>
         <UploadIcon />
-        Upload
+        <span className={alwaysLabelled ? undefined : "sr-only sm:not-sr-only"}>
+          Upload
+        </span>
       </Button>
       <input
         ref={inputRef}

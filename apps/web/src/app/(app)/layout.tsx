@@ -1,9 +1,10 @@
 "use client";
 
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { InboxIcon, Share2Icon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SearchBox } from "@/components/search-box";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -36,17 +37,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="flex items-center justify-between gap-4 border-b px-6 py-3">
-        <nav className="flex items-center gap-4">
+      <header className="flex items-center justify-between gap-3 border-b px-4 py-3 sm:gap-4 sm:px-6">
+        {/* Everything here is measured against a 375px phone: the labels fall
+            away to their icons and the signed-in address goes entirely, since
+            it is the one thing nobody needs reminding of. */}
+        <nav className="flex shrink-0 items-center gap-3 sm:gap-4">
           <Link href="/" className="font-semibold">
             Data Room
           </Link>
-          <Link
-            href="/shared-with-me"
-            className="text-muted-foreground hover:text-foreground text-sm"
-          >
+          <NavLink href="/shared-with-me" icon={<InboxIcon className="size-4" />}>
             Shared with me
-          </Link>
+          </NavLink>
+          <NavLink href="/shared-by-me" icon={<Share2Icon className="size-4" />}>
+            Shared by me
+          </NavLink>
         </nav>
         <div className="hidden flex-1 justify-center px-4 sm:flex">
           {/* SearchBox reads the query string, which opts its subtree out of
@@ -56,11 +60,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <SearchBox />
           </Suspense>
         </div>
-        <div className="flex items-center gap-3 text-sm">
+        <div className="flex shrink-0 items-center gap-2 text-sm sm:gap-3">
           <ThemeToggle />
           {me && (
             <>
-              <span className="text-muted-foreground">{me.email}</span>
+              <span className="text-muted-foreground hidden lg:inline">
+                {me.email}
+              </span>
               <Button
                 variant="outline"
                 size="sm"
@@ -78,5 +84,30 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <UploadQueuePanel />
       <UploadConflictDialog />
     </div>
+  );
+}
+
+/**
+ * A header link that keeps its icon and drops its words on a narrow screen.
+ * The label stays in the accessibility tree either way, so the link is never
+ * an unlabelled glyph.
+ */
+function NavLink({
+  href,
+  icon,
+  children,
+}: {
+  href: string;
+  icon: ReactNode;
+  children: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-sm"
+    >
+      {icon}
+      <span className="sr-only md:not-sr-only">{children}</span>
+    </Link>
   );
 }

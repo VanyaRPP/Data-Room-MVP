@@ -11,7 +11,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DownloadButton } from "@/components/viewer/download-button";
 import { useFileUrl, useFileVersions } from "@/hooks/use-file-url";
+import { downloadPath } from "@/lib/download";
 import { formatBytes, formatDate } from "@/lib/format";
 
 /**
@@ -69,6 +71,10 @@ export function PdfViewer({ fileId, name }: { fileId: string; name: string }) {
           <ExternalLinkIcon className="size-3.5" />
           Open in new tab
         </a>
+
+        {/* Downloads whatever is on screen, so saving while looking at an
+            older version gets that version rather than the current one. */}
+        <DownloadButton urlPath={downloadPath.own(fileId, version)} />
 
         {/* Only worth showing once there is history to show. */}
         {history.length > 1 && (

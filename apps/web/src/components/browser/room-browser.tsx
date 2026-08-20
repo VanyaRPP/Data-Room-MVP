@@ -31,6 +31,7 @@ import { DeleteConfirmDialog } from "@/components/dialogs/delete-confirm-dialog"
 import { MoveDialog } from "@/components/dialogs/move-dialog";
 import { NewFolderDialog } from "@/components/dialogs/new-folder-dialog";
 import { RenameDialog } from "@/components/dialogs/rename-dialog";
+import { RenameRoomDialog } from "@/components/dialogs/rename-room-dialog";
 import {
   ShareDialog,
   type ShareTarget,
@@ -45,6 +46,7 @@ import { useNodeSelection } from "@/hooks/use-node-selection";
 import { useRooms } from "@/hooks/use-rooms";
 import { ApiError } from "@/lib/api";
 import { useBrowserView } from "@/lib/browser-view-store";
+import { downloadPath, requestDownload } from "@/lib/download";
 
 /** A stable empty array, so a closed dialog is not a new prop every render. */
 const NOTHING: NodeDto[] = [];
@@ -54,6 +56,7 @@ export function RoomBrowser({ folderId }: { folderId: string }) {
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [renameTarget, setRenameTarget] = useState<NodeDto | null>(null);
   const [shareTarget, setShareTarget] = useState<ShareTarget | null>(null);
+  const [renamingRoom, setRenamingRoom] = useState(false);
   // Both dialogs take a list, so one row and a whole selection open the same
   // dialog and take the same path to the server.
   const [moveTargets, setMoveTargets] = useState<NodeDto[]>(NOTHING);
@@ -80,7 +83,8 @@ export function RoomBrowser({ folderId }: { folderId: string }) {
   const rooms = useRooms();
 
   const moveByDrag = useMoveNodes(folderId);
-  const rootId = rooms.data?.[0]?.rootNodeId ?? null;
+  const room = rooms.data?.[0] ?? null;
+  const rootId = room?.rootNodeId ?? null;
   const childrenError = children.error;
 
   // The folder can disappear while it is open - deleted from another tab, or
@@ -110,6 +114,17 @@ export function RoomBrowser({ folderId }: { folderId: string }) {
   const trail = breadcrumbs.data;
   const parent = trail && trail.length >= 2 ? trail[trail.length - 2] : null;
   const current = trail?.[trail.length - 1] ?? null;
+
+  /** Saves a file without having to open it first. */
+  async function handleDownload(node: NodeDto): Promise<void> {
+    try {
+      await requestDownload(downloadPath.own(node.id));
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not download the file",
+      );
+    }
+  }
 
   /**
    * Dropping rows onto a folder row moves them there. Dragging a row that is
@@ -191,13 +206,38 @@ export function RoomBrowser({ folderId }: { folderId: string }) {
             disabled={!current}
           >
             <Share2Icon />
-            Share
+            {/* The labels fold away on a phone, where three of them plus the
+                trail do not fit across 375px. */}
+            <span className="sr-only sm:not-sr-only">Share</span>
           </Button>
           <Button size="sm" variant="outline" onClick={() => setNewFolderOpen(true)}>
             <FolderPlusIcon />
-            New folder
+            <span className="sr-only sm:not-sr-only">New folder</span>
           </Button>
-          <UploadButton folderId={folderId} />
+          <UploadButton folderId={folderId} alwaysLabelled={false} />
+          {/* Only at the top: this acts on the room, and the room is what the
+              top of the trail stands for. Deeper down the folder you are in
+              has its own row one level up. */}
+          {room && current?.id === rootId && (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Data room options"
+                  />
+                }
+              >
+                <MoreHorizontalIcon />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-auto min-w-40">
+                <DropdownMenuItem onClick={() => setRenamingRoom(true)}>
+                  Rename data room
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       </div>
 
@@ -292,6 +332,13 @@ export function RoomBrowser({ folderId }: { folderId: string }) {
                   <MoreHorizontalIcon />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-auto min-w-32">
+                  {/* Folders have nothing to download: a zip of a subtree is a
+                      streaming job, not a signed URL. */}
+                  {node.type === "FILE" && (
+                    <DropdownMenuItem onClick={() => void handleDownload(node)}>
+                      Download
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem onClick={() => setRenameTarget(node)}>
                     Rename
                   </DropdownMenuItem>
@@ -347,6 +394,13 @@ export function RoomBrowser({ folderId }: { folderId: string }) {
         folderId={folderId}
         onOpenChange={(open) => {
           if (!open) setDeleteTargets(NOTHING);
+        }}
+      />
+
+      <RenameRoomDialog
+        room={renamingRoom ? room : null}
+        onOpenChange={(open) => {
+          if (!open) setRenamingRoom(false);
         }}
       />
 

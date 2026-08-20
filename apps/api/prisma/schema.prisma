@@ -135,10 +135,16 @@ model Share {
   createdBy   User      @relation("ShareCreator", fields: [createdById], references: [id])
   createdAt   DateTime  @default(now())
   revokedAt   DateTime?
+  // Null means the link lasts until it is revoked. Expiry is checked at read
+  // time rather than swept by a job, so a link stops working the moment it is
+  // due regardless of whether anything has run.
+  expiresAt   DateTime?
 
   grants ShareGrant[]
 
   @@index([nodeId])
+  // Listing everything one person has shared, newest first.
+  @@index([createdById, createdAt])
 }
 
 enum ShareRole {

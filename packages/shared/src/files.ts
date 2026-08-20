@@ -87,3 +87,16 @@ export const fileUrlDtoSchema = z.strictObject({
 });
 
 export type FileUrlDto = z.infer<typeof fileUrlDtoSchema>;
+
+/**
+ * Whether the signed URL should open the file or save it.
+ *
+ * The same URL either way; only the `Content-Disposition` storage attaches to
+ * it differs. `stringbool` rather than a coerced boolean because a query
+ * string carries `"false"`, which is truthy to anything less careful.
+ */
+export const fileUrlQuerySchema = z.strictObject({
+  download: z.stringbool().default(false),
+});
+
+export type FileUrlQuery = z.infer<typeof fileUrlQuerySchema>;

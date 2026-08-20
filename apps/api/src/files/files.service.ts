@@ -9,6 +9,7 @@ import {
   PDF_MIME_TYPE,
   VIEW_URL_TTL_SECONDS,
   type FileUrlDto,
+  type FileUrlQuery,
   type FileVersionDto,
   type NodeDto,
   type PresignInput,
@@ -18,7 +19,7 @@ import {
 } from '@dataroom/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccessService, type OwnedNode } from '../access/access.service';
-import { NameConflictService } from '../nodes/name-conflict.service';
+import { NameConflictService, splitName } from '../nodes/name-conflict.service';
 import { SubtreeCountersService } from '../nodes/subtree-counters.service';
 import { toNodeDto } from '../nodes/node-dto';
 import { StorageService } from '../storage/storage.service';
@@ -305,11 +306,12 @@ export class FilesService {
     ];
   }
 
-  /** A short-lived URL for viewing one specific version. */
+  /** A short-lived URL for one specific version. */
   async createVersionUrl(
     fileId: string,
     version: number,
     userId: string,
+    query: FileUrlQuery,
   ): Promise<FileUrlDto> {
     const node = await this.access.requireOwnedNode(fileId, userId);
     const currentKey = requireFileStorageKey(node);
@@ -323,11 +325,20 @@ export class FilesService {
       storageKey = archived.storageKey;
     }
 
-    return this.signView(storageKey);
+    // The saved copy says which version it is, since every version of a file
+    // shares one name and they would otherwise be indistinguishable on disk.
+    return this.signView(
+      storageKey,
+      query.download ? versionedName(node.name, version) : undefined,
+    );
   }
 
-  /** A short-lived URL for viewing the file inline. */
-  async createViewUrl(fileId: string, userId: string): Promise<FileUrlDto> {
+  /** A short-lived URL for viewing - or saving - the file. */
+  async createViewUrl(
+    fileId: string,
+    userId: string,
+    query: FileUrlQuery,
+  ): Promise<FileUrlDto> {
     const node = await this.access.requireOwnedNode(fileId, userId);
     const storageKey = requireFileStorageKey(node);
 
@@ -335,13 +346,17 @@ export class FilesService {
       throw new BadRequestException('This file is still uploading');
     }
 
-    return this.signView(storageKey);
+    return this.signView(storageKey, query.download ? node.name : undefined);
   }
 
-  private async signView(storageKey: string): Promise<FileUrlDto> {
+  private async signView(
+    storageKey: string,
+    downloadAs?: string,
+  ): Promise<FileUrlDto> {
     const url = await this.storage.createViewUrl(
       storageKey,
       VIEW_URL_TTL_SECONDS,
+      downloadAs,
     );
 
     return {
@@ -364,4 +379,10 @@ function requireFileStorageKey(node: OwnedNode): string {
     throw new BadRequestException('That item is not a file');
   }
   return node.storageKey;
+}
+
+/** `report.pdf` at version 2 saves as `report (v2).pdf`. */
+function versionedName(name: string, version: number): string {
+  const { base, extension } = splitName(name);
+  return `${base} (v${version})${extension}`;
 }

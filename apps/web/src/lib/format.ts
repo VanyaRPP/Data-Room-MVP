@@ -34,3 +34,27 @@ export function formatDate(iso: string): string {
   const date = new Date(iso);
   return Number.isNaN(date.getTime()) ? "—" : dateFormatter.format(date);
 }
+
+/**
+ * How long is left, in the units a person would use.
+ *
+ * A deadline is easier to act on as a distance than as a date: "in 3 days"
+ * says something "Sep 19" does not, and a share link is exactly the kind of
+ * thing you want to notice is nearly out.
+ */
+export function formatTimeUntil(iso: string): string {
+  const remaining = new Date(iso).getTime() - Date.now();
+  if (Number.isNaN(remaining)) return "—";
+  if (remaining <= 0) return "expired";
+
+  const hours = Math.floor(remaining / (60 * 60 * 1000));
+  if (hours < 1) return "in under an hour";
+  if (hours < 24) return `in ${plural(hours, "hour")}`;
+
+  const days = Math.round(hours / 24);
+  return days < 31 ? `in ${plural(days, "day")}` : `in ${plural(Math.round(days / 30), "month")}`;
+}
+
+function plural(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
+}

@@ -147,3 +147,14 @@ export const roomDtoSchema = z.strictObject({
 });
 
 export type RoomDto = z.infer<typeof roomDtoSchema>;
+
+/**
+ * The room's own name, which is not the root folder's.
+ *
+ * The root folder cannot be renamed - it is structural, and the whole tree
+ * hangs off it - but the room it belongs to is what everybody actually calls
+ * the thing, and "My Data Room" is nobody's name for an acquisition.
+ */
+export const renameRoomSchema = z.strictObject({ name: nodeNameSchema });
+
+export type RenameRoomInput = z.infer<typeof renameRoomSchema>;

@@ -64,6 +64,7 @@ function buildShare(overrides: Record<string, unknown> = {}) {
     createdById: OWNER_ID,
     createdAt: new Date(),
     revokedAt: null,
+    expiresAt: null,
     node: buildNode(),
     createdBy: { id: OWNER_ID, name: 'Demo User' },
     ...overrides,
@@ -152,6 +153,48 @@ describe('AccessService', () => {
         await expect(
           access.requireActiveShare('token-1', {}),
         ).rejects.toBeInstanceOf(GoneException);
+      });
+
+      it('is gone once its expiry has passed', async () => {
+        prisma.share.findUnique.mockResolvedValue(
+          buildShare({ expiresAt: new Date(Date.now() - 1000) }),
+        );
+
+        await expect(
+          access.requireActiveShare('token-1', {}),
+        ).rejects.toBeInstanceOf(GoneException);
+      });
+
+      it('is indistinguishable from every other dead link', async () => {
+        // Revoked, expired and never-real must read identically: a different
+        // message for any of them would confirm the token was once valid.
+        const reasons = [
+          null,
+          buildShare({ revokedAt: new Date() }),
+          buildShare({ expiresAt: new Date(Date.now() - 1000) }),
+        ];
+
+        const messages = new Set<string>();
+        for (const share of reasons) {
+          prisma.share.findUnique.mockResolvedValue(share);
+          await access.requireActiveShare('token-1', {}).catch((error) => {
+            messages.add((error as GoneException).message);
+          });
+        }
+
+        expect(messages.size).toBe(1);
+      });
+    });
+
+    describe('an expiry still in the future', () => {
+      it('opens the link as normal', async () => {
+        prisma.share.findUnique.mockResolvedValue(
+          buildShare({ expiresAt: new Date(Date.now() + 60_000) }),
+        );
+
+        await expect(
+          access.requireActiveShare('token-1', {}),
+        ).resolves.toMatchObject({ token: 'token-1' });
       });
     });
 

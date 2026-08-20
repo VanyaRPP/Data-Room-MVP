@@ -27,6 +27,20 @@ export interface SharedNodeAccess {
 }
 
 /**
+ * Whether a share still grants anything: not revoked, and not past its date.
+ *
+ * One definition for both, so the listing an owner sees and the door a visitor
+ * knocks on can never disagree about which links are live.
+ */
+export function isLive(
+  share: Pick<Share, 'revokedAt' | 'expiresAt'>,
+  now: Date = new Date(),
+): boolean {
+  if (share.revokedAt !== null) return false;
+  return share.expiresAt === null || share.expiresAt > now;
+}
+
+/**
  * The single place any "may this user touch this node?" question is answered,
  * so no controller ever hand-rolls its own check.
  *
@@ -90,9 +104,10 @@ export class AccessService {
    * Resolves a share link, in the order a visitor experiences it.
    *
    * The link being dead comes first and is deliberately indistinguishable
-   * between "never existed", "revoked" and "the owner deleted it" - all three
-   * are 410, because telling them apart would confirm that a token was once
-   * real. Only after the link is known good does the viewer's identity matter.
+   * between "never existed", "revoked", "expired" and "the owner deleted it" -
+   * all four are 410, because telling them apart would confirm that a token was
+   * once real. Only after the link is known good does the viewer's identity
+   * matter.
    */
   async requireActiveShare(
     token: string,
@@ -103,7 +118,9 @@ export class AccessService {
       include: { node: { include: { room: true } }, createdBy: true },
     });
 
-    if (!share || share.revokedAt !== null) {
+    // Expiry is enforced here rather than by a job that flips a column, so a
+    // link stops working the moment it is due even if nothing has run since.
+    if (!share || !isLive(share)) {
       throw new GoneException(
         'This link is no longer available. The owner may have removed it or revoked access.',
       );
