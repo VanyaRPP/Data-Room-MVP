@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { nodeNameSchema, paginationQuerySchema } from "./common";
+import { NODE_NAME_MAX_LENGTH } from "./constants";
 
 export const nodeTypeSchema = z.enum(["FOLDER", "FILE"]);
 export type NodeType = z.infer<typeof nodeTypeSchema>;
@@ -57,13 +58,28 @@ export const renameNodeSchema = z.strictObject({
 
 export type RenameNodeInput = z.infer<typeof renameNodeSchema>;
 
+export const nodeSortSchema = z.enum(["name", "size", "updated"]);
+export type NodeSort = z.infer<typeof nodeSortSchema>;
+
+export const sortDirectionSchema = z.enum(["asc", "desc"]);
+export type SortDirection = z.infer<typeof sortDirectionSchema>;
+
 /**
  * `type` narrows a listing to one kind of node. The folder picker in the move
  * dialog uses it so a folder full of files doesn't push its subfolders out of
  * reach behind pages of results.
+ *
+ * `q` narrows to names containing it, within this folder only - distinct from
+ * search, which looks across the whole room.
+ *
+ * Folders group ahead of files whichever way the sort runs: reversing the
+ * order should not shuffle folders in among the documents.
  */
 export const childrenQuerySchema = paginationQuerySchema.extend({
   type: nodeTypeSchema.optional(),
+  q: z.string().trim().min(1).max(NODE_NAME_MAX_LENGTH).optional(),
+  sort: nodeSortSchema.default("name"),
+  direction: sortDirectionSchema.default("asc"),
 });
 
 export type ChildrenQuery = z.infer<typeof childrenQuerySchema>;

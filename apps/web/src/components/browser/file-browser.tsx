@@ -1,8 +1,14 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { CornerLeftUpIcon, FileTextIcon, FolderIcon } from "lucide-react";
-import type { NodeDto } from "@dataroom/shared";
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  CornerLeftUpIcon,
+  FileTextIcon,
+  FolderIcon,
+} from "lucide-react";
+import type { NodeDto, NodeSort, SortDirection } from "@dataroom/shared";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -52,6 +58,12 @@ interface FileBrowserProps {
    * top is the shared folder, not the owner's room root.
    */
   parentFolder?: ParentFolder | null;
+  /** Makes the column headers sortable. Absent leaves them plain labels. */
+  sorting?: {
+    sort: NodeSort;
+    direction: SortDirection;
+    onSort: (column: NodeSort) => void;
+  };
 }
 
 export interface FolderTarget {
@@ -82,6 +94,7 @@ export function FileBrowser({
   renderRowActions,
   onMoveNode,
   parentFolder,
+  sorting,
 }: FileBrowserProps) {
   // The id being dragged, so a folder can tell whether it is a legal target
   // for it. dataTransfer's payload is deliberately unreadable during dragover,
@@ -122,9 +135,21 @@ export function FileBrowser({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead className="w-28">Size</TableHead>
-            <TableHead className="w-36">Modified</TableHead>
+            <TableHead>
+              <SortableHeader column="name" sorting={sorting}>
+                Name
+              </SortableHeader>
+            </TableHead>
+            <TableHead className="w-28">
+              <SortableHeader column="size" sorting={sorting}>
+                Size
+              </SortableHeader>
+            </TableHead>
+            <TableHead className="w-36">
+              <SortableHeader column="updated" sorting={sorting}>
+                Modified
+              </SortableHeader>
+            </TableHead>
             {renderRowActions && (
               <TableHead className="w-12">
                 <span className="sr-only">Actions</span>
@@ -264,6 +289,53 @@ export function FileBrowser({
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * A column heading that sorts when clicked, and reverses when clicked again.
+ *
+ * Sorting lives in the headers rather than a separate control: it is where
+ * people look for it in a table, and it costs no extra chrome above one.
+ */
+function SortableHeader({
+  column,
+  sorting,
+  children,
+}: {
+  column: NodeSort;
+  sorting: FileBrowserProps["sorting"];
+  children: ReactNode;
+}) {
+  if (!sorting) return <>{children}</>;
+
+  const isActive = sorting.sort === column;
+
+  return (
+    <button
+      type="button"
+      onClick={() => sorting.onSort(column)}
+      aria-label={`Sort by ${column}`}
+      aria-sort={
+        isActive
+          ? sorting.direction === "asc"
+            ? "ascending"
+            : "descending"
+          : "none"
+      }
+      className={cn(
+        "hover:text-foreground -mx-1 flex cursor-pointer items-center gap-1 rounded px-1",
+        !isActive && "text-muted-foreground",
+      )}
+    >
+      {children}
+      {isActive &&
+        (sorting.direction === "asc" ? (
+          <ArrowUpIcon className="size-3" />
+        ) : (
+          <ArrowDownIcon className="size-3" />
+        ))}
+    </button>
   );
 }
 

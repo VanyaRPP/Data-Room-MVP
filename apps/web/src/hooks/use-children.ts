@@ -1,11 +1,9 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
-import type { NodePage, NodeType } from "@dataroom/shared";
+import type { NodePage } from "@dataroom/shared";
 import { apiFetch } from "@/lib/api";
-import { queryKeys } from "@/lib/query-keys";
+import { queryKeys, type ChildrenView } from "@/lib/query-keys";
 
-interface UseChildrenOptions {
-  /** Narrows the listing to one node type, for the move dialog's folder picker. */
-  type?: NodeType;
+interface UseChildrenOptions extends ChildrenView {
   /** Off until a tree node is expanded, so the picker fetches only what is opened. */
   enabled?: boolean;
 }
@@ -13,18 +11,21 @@ interface UseChildrenOptions {
 /**
  * A folder's contents, one keyset-paginated page at a time. The cursor is
  * opaque: the server hands one back and it goes straight into the next
- * request untouched.
+ * request untouched - which also means it is only valid for the sort it came
+ * from, and changing the sort starts a fresh query.
  */
 export function useChildren(
   folderId: string,
-  { type, enabled = true }: UseChildrenOptions = {},
+  { enabled = true, ...view }: UseChildrenOptions = {},
 ) {
   return useInfiniteQuery({
-    queryKey: queryKeys.children(folderId, type),
+    queryKey: queryKeys.children(folderId, view),
     queryFn: ({ pageParam }) => {
       const params = new URLSearchParams();
       if (pageParam) params.set("cursor", pageParam);
-      if (type) params.set("type", type);
+      for (const [key, value] of Object.entries(view)) {
+        if (value !== undefined) params.set(key, String(value));
+      }
 
       const query = params.size > 0 ? `?${params.toString()}` : "";
       return apiFetch<NodePage>(`/nodes/${folderId}/children${query}`);

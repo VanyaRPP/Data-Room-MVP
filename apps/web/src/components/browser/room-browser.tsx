@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  FilterIcon,
   FolderIcon,
   FolderPlusIcon,
   MoreHorizontalIcon,
   Share2Icon,
 } from "lucide-react";
 import { toast } from "sonner";
-import type { NodeDto } from "@dataroom/shared";
+import type { NodeDto, NodeType } from "@dataroom/shared";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -17,6 +18,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { BrowserFilters } from "@/components/browser/browser-filters";
 import { EmptyState } from "@/components/browser/empty-state";
 import {
   FileBrowser,
@@ -36,21 +38,39 @@ import { UploadButton } from "@/components/upload/upload-button";
 import { UploadDropzone } from "@/components/upload/upload-dropzone";
 import { useBreadcrumbs } from "@/hooks/use-breadcrumbs";
 import { useChildren } from "@/hooks/use-children";
+import { useDebounced } from "@/hooks/use-debounced";
 import { useMoveNode } from "@/hooks/use-node-mutations";
 import { useRooms } from "@/hooks/use-rooms";
 import { ApiError } from "@/lib/api";
+import { useBrowserView } from "@/lib/browser-view-store";
 
 export function RoomBrowser({ folderId }: { folderId: string }) {
   const router = useRouter();
-  const children = useChildren(folderId);
-  const breadcrumbs = useBreadcrumbs(folderId);
-  const rooms = useRooms();
-
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [renameTarget, setRenameTarget] = useState<NodeDto | null>(null);
   const [moveTarget, setMoveTarget] = useState<NodeDto | null>(null);
   const [shareTarget, setShareTarget] = useState<ShareTarget | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<NodeDto | null>(null);
+
+  // The sort is a preference, so it lives outside this component and survives
+  // the remount that navigating to another folder causes. The filters describe
+  // one folder's contents, so losing them on the way out is correct.
+  const sort = useBrowserView((state) => state.sort);
+  const direction = useBrowserView((state) => state.direction);
+  const handleSort = useBrowserView((state) => state.toggleSort);
+
+  const [typeFilter, setTypeFilter] = useState<NodeType | undefined>(undefined);
+  const [filterText, setFilterText] = useState("");
+  const filterQuery = useDebounced(filterText.trim(), 250);
+
+  const children = useChildren(folderId, {
+    sort,
+    direction,
+    type: typeFilter,
+    q: filterQuery || undefined,
+  });
+  const breadcrumbs = useBreadcrumbs(folderId);
+  const rooms = useRooms();
 
   const moveByDrag = useMoveNode(folderId);
   const rootId = rooms.data?.[0]?.rootNodeId ?? null;
@@ -70,6 +90,7 @@ export function RoomBrowser({ folderId }: { folderId: string }) {
   }, [childrenError, rootId, folderId, router]);
 
   const items = children.data?.pages.flatMap((page) => page.items) ?? [];
+  const isFiltered = typeFilter !== undefined || filterQuery.length > 0;
 
   // Second from the end of the trail: the folder containing this one. Absent
   // at the room root, which has nowhere to go up to.
@@ -161,6 +182,15 @@ export function RoomBrowser({ folderId }: { folderId: string }) {
         </div>
       </div>
 
+      <div className="mb-3 flex justify-end">
+        <BrowserFilters
+          type={typeFilter}
+          onTypeChange={setTypeFilter}
+          query={filterText}
+          onQueryChange={setFilterText}
+        />
+      </div>
+
       <UploadDropzone folderId={folderId}>
         <div className="rounded-xl border">
           <FileBrowser
@@ -174,6 +204,7 @@ export function RoomBrowser({ folderId }: { folderId: string }) {
             isFetchingNextPage={children.isFetchingNextPage}
             onLoadMore={() => void children.fetchNextPage()}
             onMoveNode={handleDragMove}
+            sorting={{ sort, direction, onSort: handleSort }}
             parentFolder={
               parent
                 ? {
@@ -185,6 +216,28 @@ export function RoomBrowser({ folderId }: { folderId: string }) {
                 : null
             }
             emptyState={
+              isFiltered ? (
+                // An empty result under a filter is not an empty folder, and
+                // offering to upload here would be answering a question nobody
+                // asked.
+                <EmptyState
+                  icon={<FilterIcon />}
+                  title="Nothing here matches"
+                  description="No item in this folder matches the current filter."
+                  action={
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setTypeFilter(undefined);
+                        setFilterText("");
+                      }}
+                    >
+                      Clear the filter
+                    </Button>
+                  }
+                />
+              ) : (
               <EmptyState
                 icon={<FolderIcon />}
                 title="This folder is empty"
@@ -203,6 +256,7 @@ export function RoomBrowser({ folderId }: { folderId: string }) {
                   </div>
                 }
               />
+              )
             }
             renderRowActions={(node) => (
               <DropdownMenu>

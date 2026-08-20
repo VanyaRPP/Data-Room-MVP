@@ -1,4 +1,11 @@
-import type { NodeType } from "@dataroom/shared";
+import type { NodeSort, NodeType, SortDirection } from "@dataroom/shared";
+
+export interface ChildrenView {
+  type?: NodeType;
+  sort?: NodeSort;
+  direction?: SortDirection;
+  q?: string;
+}
 
 /**
  * Every query key in one place, so cache invalidation after a mutation can
@@ -9,13 +16,13 @@ export const queryKeys = {
   me: ["me"] as const,
   rooms: ["rooms"] as const,
   /**
-   * The type-filtered listing (the move dialog's folder picker) nests under
-   * the unfiltered one, so invalidating `["children", id]` after a mutation
-   * refreshes both by prefix match.
+   * Every sorted or filtered view of a folder nests under the plain one, so
+   * `["children", id]` matches all of them - which is what lets a mutation
+   * invalidate, and optimistically update, every variant at once.
    */
-  children: (folderId: string, type?: NodeType) =>
-    type
-      ? (["children", folderId, type] as const)
+  children: (folderId: string, view?: ChildrenView) =>
+    view && Object.values(view).some((value) => value !== undefined)
+      ? (["children", folderId, view] as const)
       : (["children", folderId] as const),
   breadcrumbs: (nodeId: string) => ["breadcrumbs", nodeId] as const,
   deletePreview: (nodeId: string) => ["delete-preview", nodeId] as const,

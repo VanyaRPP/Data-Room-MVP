@@ -67,9 +67,12 @@ export function useRenameNode(folderId: string) {
       // Stop any in-flight refetch from landing after this and overwriting
       // the optimistic value with pre-rename data.
       await queryClient.cancelQueries({ queryKey });
-      const previous = queryClient.getQueryData<ChildrenCache>(queryKey);
+      // Every sorted or filtered view of this folder is a separate cache
+      // entry; updating only the default one would leave the view the user is
+      // actually looking at unchanged.
+      const previous = queryClient.getQueriesData<ChildrenCache>({ queryKey });
 
-      queryClient.setQueryData<ChildrenCache>(queryKey, (cache) =>
+      queryClient.setQueriesData<ChildrenCache>({ queryKey }, (cache) =>
         mapCachedItems(cache, (items) =>
           items.map((item) =>
             item.id === nodeId ? { ...item, name } : item,
@@ -80,8 +83,8 @@ export function useRenameNode(folderId: string) {
       return { previous };
     },
     onError: (_error, _variables, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(queryKey, context.previous);
+      for (const [key, data] of context?.previous ?? []) {
+        queryClient.setQueryData(key, data);
       }
     },
     onSettled: (_data, _error, { nodeId }) => {
@@ -108,11 +111,14 @@ export function useMoveNode(folderId: string) {
       apiFetch<NodeDto>(`/nodes/${nodeId}/move`, { method: "POST", body }),
     onMutate: async ({ nodeId }) => {
       await queryClient.cancelQueries({ queryKey });
-      const previous = queryClient.getQueryData<ChildrenCache>(queryKey);
+      // Every sorted or filtered view of this folder is a separate cache
+      // entry; updating only the default one would leave the view the user is
+      // actually looking at unchanged.
+      const previous = queryClient.getQueriesData<ChildrenCache>({ queryKey });
 
       // It is leaving this folder, so drop it here right away; a rejected
       // move (a name clash in the target) puts it back.
-      queryClient.setQueryData<ChildrenCache>(queryKey, (cache) =>
+      queryClient.setQueriesData<ChildrenCache>({ queryKey }, (cache) =>
         mapCachedItems(cache, (items) =>
           items.filter((item) => item.id !== nodeId),
         ),
@@ -121,8 +127,8 @@ export function useMoveNode(folderId: string) {
       return { previous };
     },
     onError: (_error, _variables, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(queryKey, context.previous);
+      for (const [key, data] of context?.previous ?? []) {
+        queryClient.setQueryData(key, data);
       }
     },
     onSettled: (_data, _error, { nodeId, targetFolderId }) => {
@@ -146,9 +152,12 @@ export function useDeleteNode(folderId: string) {
       apiFetch<void>(`/nodes/${nodeId}`, { method: "DELETE" }),
     onMutate: async (nodeId) => {
       await queryClient.cancelQueries({ queryKey });
-      const previous = queryClient.getQueryData<ChildrenCache>(queryKey);
+      // Every sorted or filtered view of this folder is a separate cache
+      // entry; updating only the default one would leave the view the user is
+      // actually looking at unchanged.
+      const previous = queryClient.getQueriesData<ChildrenCache>({ queryKey });
 
-      queryClient.setQueryData<ChildrenCache>(queryKey, (cache) =>
+      queryClient.setQueriesData<ChildrenCache>({ queryKey }, (cache) =>
         mapCachedItems(cache, (items) =>
           items.filter((item) => item.id !== nodeId),
         ),
@@ -157,8 +166,8 @@ export function useDeleteNode(folderId: string) {
       return { previous };
     },
     onError: (_error, _nodeId, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(queryKey, context.previous);
+      for (const [key, data] of context?.previous ?? []) {
+        queryClient.setQueryData(key, data);
       }
     },
     onSettled: (_data, _error, nodeId) => {
