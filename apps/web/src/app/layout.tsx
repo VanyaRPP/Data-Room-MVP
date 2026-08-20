@@ -1,16 +1,22 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist_Mono, Inter } from "next/font/google";
 import { Providers } from "@/components/providers";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// These names must differ from Tailwind's own --font-sans / --font-mono:
+// globals.css points those at these, and a variable defined in terms of
+// itself is circular, resolves to nothing, and drops the whole app to the
+// browser's default serif.
+const sans = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
+const mono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -28,9 +34,7 @@ export default function RootLayout({
     // server cannot know about; without this React reports the difference as a
     // hydration error.
     <html lang="en" suppressHydrationWarning>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+      <body className={`${sans.variable} ${mono.variable} antialiased`}>
         <Providers>{children}</Providers>
       </body>
     </html>

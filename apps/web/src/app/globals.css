@@ -7,8 +7,14 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Point at the variables next/font declares in layout.tsx - deliberately
+     different names, since a variable defined in terms of itself resolves to
+     nothing. The stack behind each covers the moment before the webfont
+     arrives. */
+  --font-sans:
+    var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Menlo, monospace;
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -48,73 +54,91 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/*
+ * Neutrals carry a slight cool tint (hue 265) rather than being pure grey:
+ * untinted greys read flat and cheap on screen, and a trace of chroma makes
+ * the whole surface feel deliberate. Colour is spent only where it means
+ * something - the primary action and destructive states.
+ *
+ * Lightness values are chosen for contrast, not vibes: body text and the
+ * muted secondary text both clear 4.5:1 against their backgrounds, and so
+ * does white on the primary button.
+ */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --background: oklch(0.994 0.001 265);
+  --foreground: oklch(0.21 0.015 265);
+  /* Pure white, so cards and popovers lift off the tinted page behind them. */
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.21 0.015 265);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --popover-foreground: oklch(0.21 0.015 265);
+  --primary: oklch(0.48 0.19 265);
+  --primary-foreground: oklch(0.99 0.002 265);
+  --secondary: oklch(0.967 0.004 265);
+  --secondary-foreground: oklch(0.24 0.02 265);
+  --muted: oklch(0.967 0.004 265);
+  --muted-foreground: oklch(0.48 0.016 265);
+  --accent: oklch(0.955 0.008 265);
+  --accent-foreground: oklch(0.24 0.02 265);
+  --destructive: oklch(0.48 0.2 25);
+  --border: oklch(0.912 0.006 265);
+  --input: oklch(0.9 0.008 265);
+  /* Focus rings echo the primary, so focus reads as one idea across the UI. */
+  --ring: oklch(0.48 0.19 265);
+  --chart-1: oklch(0.48 0.19 265);
+  --chart-2: oklch(0.6 0.14 200);
+  --chart-3: oklch(0.65 0.15 155);
+  --chart-4: oklch(0.7 0.15 85);
+  --chart-5: oklch(0.55 0.18 320);
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar: oklch(0.98 0.003 265);
+  --sidebar-foreground: oklch(0.21 0.015 265);
+  --sidebar-primary: oklch(0.48 0.19 265);
+  --sidebar-primary-foreground: oklch(0.99 0.002 265);
+  --sidebar-accent: oklch(0.955 0.008 265);
+  --sidebar-accent-foreground: oklch(0.24 0.02 265);
+  --sidebar-border: oklch(0.912 0.006 265);
+  --sidebar-ring: oklch(0.48 0.19 265);
 }
 
+/*
+ * Not the light palette inverted: dark surfaces need a deeper, slightly more
+ * saturated base to avoid the washed-out grey that plain inversion produces.
+ * The primary brightens rather than darkens, and takes dark text - white on a
+ * mid-blue at this lightness would fall below 4.5:1.
+ */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: oklch(0.165 0.012 265);
+  --foreground: oklch(0.96 0.005 265);
+  --card: oklch(0.205 0.014 265);
+  --card-foreground: oklch(0.96 0.005 265);
+  --popover: oklch(0.215 0.015 265);
+  --popover-foreground: oklch(0.96 0.005 265);
+  --primary: oklch(0.65 0.16 265);
+  --primary-foreground: oklch(0.15 0.02 265);
+  --secondary: oklch(0.26 0.015 265);
+  --secondary-foreground: oklch(0.96 0.005 265);
+  --muted: oklch(0.26 0.015 265);
+  --muted-foreground: oklch(0.72 0.02 265);
+  --accent: oklch(0.29 0.02 265);
+  --accent-foreground: oklch(0.97 0.005 265);
+  --destructive: oklch(0.7 0.17 25);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.65 0.16 265);
+  --chart-1: oklch(0.65 0.16 265);
+  --chart-2: oklch(0.7 0.13 200);
+  --chart-3: oklch(0.72 0.14 155);
+  --chart-4: oklch(0.78 0.14 85);
+  --chart-5: oklch(0.68 0.16 320);
+  --sidebar: oklch(0.19 0.013 265);
+  --sidebar-foreground: oklch(0.96 0.005 265);
+  --sidebar-primary: oklch(0.65 0.16 265);
+  --sidebar-primary-foreground: oklch(0.15 0.02 265);
+  --sidebar-accent: oklch(0.29 0.02 265);
+  --sidebar-accent-foreground: oklch(0.97 0.005 265);
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: oklch(0.65 0.16 265);
 }
 
 @layer base {
@@ -123,8 +147,11 @@
   }
   body {
     @apply bg-background text-foreground;
-  }
-  html {
-    @apply font-sans;
+    /* Set outright rather than through @apply font-sans: next/font declares
+       --font-inter on this element, and stating the family here keeps the
+       app's base typeface from depending on theme-variable resolution
+       order. */
+    font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+      "Segoe UI", sans-serif;
   }
 }
