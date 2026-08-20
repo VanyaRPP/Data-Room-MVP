@@ -373,7 +373,54 @@ component with actions passed in.
 
 ## AI usage
 
-<!-- TODO: author to fill in personally before submitting. -->
+I built this with Claude Code, and used it the way I would use a fast engineer
+who has never seen the product before: I decided what to build and how the data
+should be shaped, it wrote most of the code, and I kept the means of checking it
+in my own hands.
+
+**What I decided.** The data model, and the trade-offs behind it: an adjacency
+list with recursive CTEs rather than a closure table, because folders move often
+here and a closure table rewrites a row per ancestor-descendant pair on every
+move. Keyset pagination instead of `OFFSET`. Uploads going straight to storage
+so file bytes never pass through the API. 404-never-403 for a node you do not
+own, and a single 410 for every kind of dead link. Denormalised folder totals
+maintained inside the transaction that changes them *and* a reconciliation
+script, rather than either on its own. And every product call: that a name
+clash offers "keep both" instead of refusing, that dragging a ticked row takes
+the whole selection with it, that the delete confirmation states real numbers,
+that the delete preview keeps reading the tree even though a faster number sits
+right there - and what to leave out when the time ran short.
+
+**What the model wrote.** Most of the implementation, the recursive SQL, the
+Vitest and Playwright suites, and the first draft of this README. It is quick at
+the part that is typing and consistent detail, and genuinely good at SQL I would
+otherwise have written slowly.
+
+**What made it trustworthy.** Not review by reading - review by running. Nothing
+counted as done until `typecheck && lint && build && test` passed, and every
+feature was driven in a real browser rather than trusted from the diff. Some of
+what that caught:
+
+- `counters:check` recomputes every folder's totals from the tree and compares
+  them with the stored ones. It found drift the first time it ran: the seed
+  writes rows directly, so it bypassed the service that maintains them.
+- Sorting by size would have silently dropped every folder from page two.
+  Folders have no size, and a `NULL` inside a tuple comparison is never true.
+  Paging every sort and direction through a mixed folder is what surfaced it.
+- The entire app rendered in Times New Roman for a while, because a CSS variable
+  had been defined in terms of itself and resolved to nothing. The code read
+  correctly; only measuring the computed style showed it.
+- Renaming the data room appeared to work and changed nothing on screen: the
+  room and its root folder are one thing to a reader and two rows underneath.
+  Clicking through it is what showed the trail had not moved.
+- A Vercel deploy failed because a hook that reads the query string had no
+  Suspense boundary - something only the production build catches. It got
+  through because I had let `build` slip out of that gate for a few rounds.
+
+That last one is the honest summary of the experience. The model is fast and
+usually right, and neither of those is the same as correct. The work that
+mattered was deciding what to build, and keeping a harness that could tell me
+when it had not been.
 
 ## What I'd do next
 
