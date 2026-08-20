@@ -33,19 +33,26 @@ export function PublicBrowser({ share, folderId }: PublicBrowserProps) {
 
   const items = children.data?.pages.flatMap((page) => page.items) ?? [];
 
+  // The trail already stops at the shared folder, so "up" can never climb out
+  // of the share and into the owner's room.
+  const trail = breadcrumbs.data;
+  const parent = trail && trail.length >= 2 ? trail[trail.length - 2] : null;
+
+  const openFolder = (nodeId: string): void => {
+    router.push(
+      nodeId === share.root.id
+        ? `/s/${share.token}`
+        : `/s/${share.token}/folder/${nodeId}`,
+    );
+  };
+
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-6">
       <div className="mb-4">
         <PathBreadcrumbs
           items={breadcrumbs.data}
           isLoading={breadcrumbs.isLoading}
-          onNavigate={(nodeId) =>
-            router.push(
-              nodeId === share.root.id
-                ? `/s/${share.token}`
-                : `/s/${share.token}/folder/${nodeId}`,
-            )
-          }
+          onNavigate={openFolder}
         />
       </div>
 
@@ -55,10 +62,18 @@ export function PublicBrowser({ share, folderId }: PublicBrowserProps) {
           isLoading={children.isLoading}
           error={children.error}
           onRetry={() => void children.refetch()}
-          onOpenFolder={(node) =>
-            router.push(`/s/${share.token}/folder/${node.id}`)
-          }
+          onOpenFolder={(node) => openFolder(node.id)}
           onOpenFile={(node) => router.push(`/s/${share.token}/file/${node.id}`)}
+          // No onDrop: a shared view can navigate up, never move anything.
+          parentFolder={
+            parent
+              ? {
+                  id: parent.id,
+                  name: parent.name,
+                  onOpen: () => openFolder(parent.id),
+                }
+              : null
+          }
           hasNextPage={children.hasNextPage}
           isFetchingNextPage={children.isFetchingNextPage}
           onLoadMore={() => void children.fetchNextPage()}

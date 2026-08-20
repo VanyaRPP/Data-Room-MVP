@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { FileTextIcon, FolderIcon } from "lucide-react";
+import { CornerLeftUpIcon, FileTextIcon, FolderIcon } from "lucide-react";
 import type { NodeDto } from "@dataroom/shared";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -45,7 +45,24 @@ interface FileBrowserProps {
    * Enables dragging a row onto a folder row to move it there. Undefined on
    * read-only views, which makes every row undraggable.
    */
-  onMoveNode?: (node: NodeDto, targetFolder: NodeDto) => void;
+  onMoveNode?: (node: NodeDto, targetFolder: FolderTarget) => void;
+  /**
+   * The folder one level up, shown as a row that navigates there and accepts
+   * dropped rows. Absent at the top of the tree - and in a shared view that
+   * top is the shared folder, not the owner's room root.
+   */
+  parentFolder?: ParentFolder | null;
+}
+
+export interface FolderTarget {
+  id: string;
+  name: string;
+}
+
+export interface ParentFolder extends FolderTarget {
+  onOpen: () => void;
+  /** Absent on read-only views, leaving the row navigation-only. */
+  onDrop?: (node: NodeDto) => void;
 }
 
 /** Marks a drag as coming from inside the table rather than the desktop. */
@@ -64,12 +81,14 @@ export function FileBrowser({
   onLoadMore,
   renderRowActions,
   onMoveNode,
+  parentFolder,
 }: FileBrowserProps) {
   // The id being dragged, so a folder can tell whether it is a legal target
   // for it. dataTransfer's payload is deliberately unreadable during dragover,
   // so the only way to know is to remember what the drag started with.
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  const [overParent, setOverParent] = useState(false);
 
   const isDraggable = onMoveNode !== undefined;
 
@@ -114,6 +133,50 @@ export function FileBrowser({
           </TableRow>
         </TableHeader>
         <TableBody>
+          {parentFolder && (
+            <TableRow
+              onClick={parentFolder.onOpen}
+              onDragOver={(event) => {
+                if (!parentFolder.onDrop || draggingId === null) return;
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+                setOverParent(true);
+              }}
+              onDragLeave={(event) => {
+                if (
+                  event.currentTarget.contains(event.relatedTarget as Node | null)
+                ) {
+                  return;
+                }
+                setOverParent(false);
+              }}
+              onDrop={(event) => {
+                if (!parentFolder.onDrop || draggingId === null) return;
+                event.preventDefault();
+                event.stopPropagation();
+
+                const movedId = event.dataTransfer.getData(NODE_DRAG_TYPE);
+                const moved = items.find((item) => item.id === movedId);
+                setDraggingId(null);
+                setOverParent(false);
+                if (moved) parentFolder.onDrop(moved);
+              }}
+              className={cn(
+                "cursor-pointer",
+                overParent && "bg-accent outline-primary -outline-offset-2 outline-2",
+              )}
+            >
+              <TableCell className="w-full max-w-0">
+                <span className="text-muted-foreground flex min-w-0 items-center gap-2">
+                  <CornerLeftUpIcon className="size-4 shrink-0" />
+                  <span className="truncate">{parentFolder.name}</span>
+                </span>
+              </TableCell>
+              <TableCell />
+              <TableCell />
+              {renderRowActions && <TableCell />}
+            </TableRow>
+          )}
           {items.map((node) => (
             <TableRow
               key={node.id}
@@ -126,6 +189,7 @@ export function FileBrowser({
               onDragEnd={() => {
                 setDraggingId(null);
                 setDropTargetId(null);
+                setOverParent(false);
               }}
               onDragOver={(event) => {
                 if (!canDropOn(node)) return;

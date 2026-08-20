@@ -13,7 +13,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { EmptyState } from "@/components/browser/empty-state";
-import { FileBrowser } from "@/components/browser/file-browser";
+import {
+  FileBrowser,
+  type FolderTarget,
+} from "@/components/browser/file-browser";
 import { PathBreadcrumbs } from "@/components/browser/path-breadcrumbs";
 import { DeleteConfirmDialog } from "@/components/dialogs/delete-confirm-dialog";
 import { MoveDialog } from "@/components/dialogs/move-dialog";
@@ -59,13 +62,18 @@ export function RoomBrowser({ folderId }: { folderId: string }) {
 
   const items = children.data?.pages.flatMap((page) => page.items) ?? [];
 
+  // Second from the end of the trail: the folder containing this one. Absent
+  // at the room root, which has nowhere to go up to.
+  const trail = breadcrumbs.data;
+  const parent = trail && trail.length >= 2 ? trail[trail.length - 2] : null;
+
   /**
    * Dropping a row onto a folder row moves it there.
    *
    * A name clash cannot open a dialog here without throwing away the gesture
    * the user just made, so the offer to keep both rides along on the toast.
    */
-  function handleDragMove(node: NodeDto, target: NodeDto): void {
+  function handleDragMove(node: NodeDto, target: FolderTarget): void {
     const run = (onConflict: "fail" | "rename"): void => {
       moveByDrag.mutate(
         { nodeId: node.id, targetFolderId: target.id, onConflict },
@@ -123,6 +131,16 @@ export function RoomBrowser({ folderId }: { folderId: string }) {
             isFetchingNextPage={children.isFetchingNextPage}
             onLoadMore={() => void children.fetchNextPage()}
             onMoveNode={handleDragMove}
+            parentFolder={
+              parent
+                ? {
+                    id: parent.id,
+                    name: parent.name,
+                    onOpen: () => router.push(`/room/${parent.id}`),
+                    onDrop: (node) => handleDragMove(node, parent),
+                  }
+                : null
+            }
             emptyState={
               <EmptyState
                 icon={<FolderIcon />}
