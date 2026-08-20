@@ -115,17 +115,17 @@ erDiagram
         uuid id PK
         uuid roomId FK
         uuid parentId FK "null only for the root"
-        enum type "FOLDER | FILE"
+        enum type "FOLDER or FILE"
         string name
         bigint size "FILE only"
         string mimeType "FILE only"
         string storageKey UK "FILE only"
-        enum status "UPLOADING | READY, FILE only"
+        enum status "UPLOADING then READY, FILE only"
     }
     Share {
         uuid id PK
         uuid nodeId FK
-        enum mode "PUBLIC | RESTRICTED"
+        enum mode "PUBLIC or RESTRICTED"
         string token UK "256-bit, unguessable"
         uuid createdById FK
         datetime revokedAt "null while active"
