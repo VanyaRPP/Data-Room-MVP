@@ -24,7 +24,10 @@ export const queryKeys = {
       ? (["file-url", fileId] as const)
       : (["file-url", fileId, version] as const),
   fileVersions: (fileId: string) => ["file-versions", fileId] as const,
-  search: (query: string) => ["search", query] as const,
+  search: (query: string, limit?: number) =>
+    limit === undefined
+      ? (["search", query] as const)
+      : (["search", query, limit] as const),
   shares: (nodeId: string) => ["shares", nodeId] as const,
   sharedWithMe: ["shared-with-me"] as const,
 
