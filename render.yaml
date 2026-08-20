@@ -28,6 +28,11 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      # The start command runs pnpm through corepack, which otherwise stops to
+      # ask permission before downloading it - on a non-interactive host that
+      # prompt has nobody to answer it.
+      - key: COREPACK_ENABLE_DOWNLOAD_PROMPT
+        value: "0"
       # Supabase: transaction pooler for queries, session pooler for migrations.
       - key: DATABASE_URL
         sync: false
