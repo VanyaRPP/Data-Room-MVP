@@ -5,6 +5,7 @@ import { FolderIcon } from "lucide-react";
 import type { PublicShareDto } from "@dataroom/shared";
 import { EmptyState } from "@/components/browser/empty-state";
 import { FileBrowser } from "@/components/browser/file-browser";
+import { PublicFolderPeek } from "@/components/browser/folder-peek";
 import { PathBreadcrumbs } from "@/components/browser/path-breadcrumbs";
 import { ShareGoneScreen } from "@/components/public/share-gone-screen";
 import { isGone, usePublicBreadcrumbs, usePublicChildren } from "@/hooks/use-public";
@@ -53,6 +54,19 @@ export function PublicBrowser({ share, folderId }: PublicBrowserProps) {
           items={breadcrumbs.data}
           isLoading={breadcrumbs.isLoading}
           onNavigate={openFolder}
+          renderPeek={(folder) => (
+            <PublicFolderPeek
+              token={share.token}
+              folderId={folder.id}
+              folderName={folder.name}
+              onSelect={(node) =>
+                node.type === "FOLDER"
+                  ? openFolder(node.id)
+                  : router.push(`/s/${share.token}/file/${node.id}`)
+              }
+              onOpenFolder={() => openFolder(folder.id)}
+            />
+          )}
         />
       </div>
 

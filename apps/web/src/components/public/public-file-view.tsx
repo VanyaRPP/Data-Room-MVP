@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { ExternalLinkIcon } from "lucide-react";
 import type { PublicShareDto } from "@dataroom/shared";
+import { PublicFolderPeek } from "@/components/browser/folder-peek";
 import { PathBreadcrumbs } from "@/components/browser/path-breadcrumbs";
 import { ShareGoneScreen } from "@/components/public/share-gone-screen";
 import { Button } from "@/components/ui/button";
@@ -31,18 +32,33 @@ export function PublicFileView({
   const trail = breadcrumbs.data;
   const name = trail?.[trail.length - 1]?.name ?? "";
 
+  const openFolder = (nodeId: string): void => {
+    router.push(
+      nodeId === share.root.id
+        ? `/s/${share.token}`
+        : `/s/${share.token}/folder/${nodeId}`,
+    );
+  };
+
   return (
     <div className="mx-auto flex h-[calc(100vh-3.25rem)] w-full max-w-5xl flex-col gap-4 px-6 py-6">
       <PathBreadcrumbs
         items={trail}
         isLoading={breadcrumbs.isLoading}
-        onNavigate={(nodeId) =>
-          router.push(
-            nodeId === share.root.id
-              ? `/s/${share.token}`
-              : `/s/${share.token}/folder/${nodeId}`,
-          )
-        }
+        onNavigate={openFolder}
+        renderPeek={(folder) => (
+          <PublicFolderPeek
+            token={share.token}
+            folderId={folder.id}
+            folderName={folder.name}
+            onSelect={(node) =>
+              node.type === "FOLDER"
+                ? openFolder(node.id)
+                : router.push(`/s/${share.token}/file/${node.id}`)
+            }
+            onOpenFolder={() => openFolder(folder.id)}
+          />
+        )}
       />
 
       <div className="min-h-0 flex-1">

@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment } from "react";
+import { Fragment, type ReactNode } from "react";
 import type { BreadcrumbDto } from "@dataroom/shared";
 import {
   Breadcrumb,
@@ -30,12 +30,19 @@ interface PathBreadcrumbsProps {
   items: BreadcrumbDto[] | undefined;
   isLoading: boolean;
   onNavigate: (nodeId: string) => void;
+  /**
+   * Renders a menu previewing a folder in the trail. Left out where there is
+   * nothing to preview with - the file viewer's own trail, say - which simply
+   * hides the affordance.
+   */
+  renderPeek?: (folder: BreadcrumbDto) => ReactNode;
 }
 
 export function PathBreadcrumbs({
   items,
   isLoading,
   onNavigate,
+  renderPeek,
 }: PathBreadcrumbsProps) {
   if (isLoading || !items || items.length === 0) {
     return <Skeleton className="h-5 w-48" />;
@@ -64,6 +71,7 @@ export function PathBreadcrumbs({
               >
                 {leading.name}
               </BreadcrumbLink>
+              {renderPeek?.(leading)}
             </BreadcrumbItem>
             <BreadcrumbSeparator />
             <BreadcrumbItem>
@@ -109,6 +117,7 @@ export function PathBreadcrumbs({
               >
                 {item.name}
               </BreadcrumbLink>
+              {renderPeek?.(item)}
             </BreadcrumbItem>
             <BreadcrumbSeparator />
           </Fragment>

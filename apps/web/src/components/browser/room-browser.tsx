@@ -17,6 +17,7 @@ import {
   FileBrowser,
   type FolderTarget,
 } from "@/components/browser/file-browser";
+import { FolderPeek } from "@/components/browser/folder-peek";
 import { PathBreadcrumbs } from "@/components/browser/path-breadcrumbs";
 import { DeleteConfirmDialog } from "@/components/dialogs/delete-confirm-dialog";
 import { MoveDialog } from "@/components/dialogs/move-dialog";
@@ -108,6 +109,20 @@ export function RoomBrowser({ folderId }: { folderId: string }) {
           items={breadcrumbs.data}
           isLoading={breadcrumbs.isLoading}
           onNavigate={(nodeId) => router.push(`/room/${nodeId}`)}
+          renderPeek={(folder) => (
+            <FolderPeek
+              folderId={folder.id}
+              folderName={folder.name}
+              onSelect={(node) =>
+                router.push(
+                  node.type === "FOLDER"
+                    ? `/room/${node.id}`
+                    : `/file/${node.id}`,
+                )
+              }
+              onOpenFolder={() => router.push(`/room/${folder.id}`)}
+            />
+          )}
         />
         <div className="flex shrink-0 items-center gap-2">
           <Button size="sm" variant="outline" onClick={() => setNewFolderOpen(true)}>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
+import { FolderPeek } from "@/components/browser/folder-peek";
 import { PathBreadcrumbs } from "@/components/browser/path-breadcrumbs";
 import { PdfViewer } from "@/components/viewer/pdf-viewer";
 import { useBreadcrumbs } from "@/hooks/use-breadcrumbs";
@@ -21,6 +22,20 @@ export default function FilePage() {
         items={trail}
         isLoading={breadcrumbs.isLoading}
         onNavigate={(nodeId) => router.push(`/room/${nodeId}`)}
+        // Worth having here especially: the containing folder's menu is how
+        // you get to the next document without going back first.
+        renderPeek={(folder) => (
+          <FolderPeek
+            folderId={folder.id}
+            folderName={folder.name}
+            onSelect={(node) =>
+              router.push(
+                node.type === "FOLDER" ? `/room/${node.id}` : `/file/${node.id}`,
+              )
+            }
+            onOpenFolder={() => router.push(`/room/${folder.id}`)}
+          />
+        )}
       />
       <div className="min-h-0 flex-1">
         <PdfViewer fileId={params.fileId} name={name} />
