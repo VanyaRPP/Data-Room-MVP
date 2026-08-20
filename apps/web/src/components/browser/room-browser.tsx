@@ -2,7 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FolderIcon, FolderPlusIcon, MoreHorizontalIcon } from "lucide-react";
+import {
+  FolderIcon,
+  FolderPlusIcon,
+  MoreHorizontalIcon,
+  Share2Icon,
+} from "lucide-react";
 import { toast } from "sonner";
 import type { NodeDto } from "@dataroom/shared";
 import { Button } from "@/components/ui/button";
@@ -23,7 +28,10 @@ import { DeleteConfirmDialog } from "@/components/dialogs/delete-confirm-dialog"
 import { MoveDialog } from "@/components/dialogs/move-dialog";
 import { NewFolderDialog } from "@/components/dialogs/new-folder-dialog";
 import { RenameDialog } from "@/components/dialogs/rename-dialog";
-import { ShareDialog } from "@/components/dialogs/share-dialog";
+import {
+  ShareDialog,
+  type ShareTarget,
+} from "@/components/dialogs/share-dialog";
 import { UploadButton } from "@/components/upload/upload-button";
 import { UploadDropzone } from "@/components/upload/upload-dropzone";
 import { useBreadcrumbs } from "@/hooks/use-breadcrumbs";
@@ -41,7 +49,7 @@ export function RoomBrowser({ folderId }: { folderId: string }) {
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [renameTarget, setRenameTarget] = useState<NodeDto | null>(null);
   const [moveTarget, setMoveTarget] = useState<NodeDto | null>(null);
-  const [shareTarget, setShareTarget] = useState<NodeDto | null>(null);
+  const [shareTarget, setShareTarget] = useState<ShareTarget | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<NodeDto | null>(null);
 
   const moveByDrag = useMoveNode(folderId);
@@ -67,6 +75,7 @@ export function RoomBrowser({ folderId }: { folderId: string }) {
   // at the room root, which has nowhere to go up to.
   const trail = breadcrumbs.data;
   const parent = trail && trail.length >= 2 ? trail[trail.length - 2] : null;
+  const current = trail?.[trail.length - 1] ?? null;
 
   /**
    * Dropping a row onto a folder row moves it there.
@@ -125,6 +134,25 @@ export function RoomBrowser({ folderId }: { folderId: string }) {
           )}
         />
         <div className="flex shrink-0 items-center gap-2">
+          {/* Shares whatever level is open, which is the only way to share the
+              room itself: the root has no row of its own to act on. */}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() =>
+              current &&
+              setShareTarget({
+                id: current.id,
+                name: current.name,
+                type: "FOLDER",
+                isRoom: current.id === rootId,
+              })
+            }
+            disabled={!current}
+          >
+            <Share2Icon />
+            Share
+          </Button>
           <Button size="sm" variant="outline" onClick={() => setNewFolderOpen(true)}>
             <FolderPlusIcon />
             New folder

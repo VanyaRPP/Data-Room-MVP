@@ -3,7 +3,11 @@
 import { useState, type FormEvent } from "react";
 import { CheckIcon, CopyIcon, LinkIcon, UsersIcon } from "lucide-react";
 import { toast } from "sonner";
-import { shareEmailSchema, type NodeDto, type ShareDto } from "@dataroom/shared";
+import {
+  shareEmailSchema,
+  type NodeType,
+  type ShareDto,
+} from "@dataroom/shared";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,8 +26,20 @@ import {
   useShares,
 } from "@/hooks/use-shares";
 
+/**
+ * Anything shareable: a file, a folder, or the room's own root folder - which
+ * is how "share the whole data room" is expressed.
+ */
+export interface ShareTarget {
+  id: string;
+  name: string;
+  type: NodeType;
+  /** True for the room root, which reads as a data room rather than a folder. */
+  isRoom?: boolean;
+}
+
 interface ShareDialogProps {
-  node: NodeDto | null;
+  node: ShareTarget | null;
   onOpenChange: (open: boolean) => void;
 }
 
@@ -37,7 +53,7 @@ export function ShareDialog({ node, onOpenChange }: ShareDialogProps) {
   );
 }
 
-function ShareDialogBody({ node }: { node: NodeDto }) {
+function ShareDialogBody({ node }: { node: ShareTarget }) {
   const shares = useShares(node.id);
   const publicShare = shares.data?.find((share) => share.mode === "PUBLIC");
   const restrictedShare = shares.data?.find(
@@ -49,8 +65,7 @@ function ShareDialogBody({ node }: { node: NodeDto }) {
       <DialogHeader>
         <DialogTitle>Share &ldquo;{node.name}&rdquo;</DialogTitle>
         <DialogDescription>
-          Anyone you share with gets read-only access to this{" "}
-          {node.type === "FOLDER" ? "folder and everything inside it" : "file"}.
+          Anyone you share with gets read-only access to this {describe(node)}.
         </DialogDescription>
       </DialogHeader>
 
@@ -278,6 +293,11 @@ function SpecificPeopleTab({
       )}
     </div>
   );
+}
+
+function describe(node: ShareTarget): string {
+  if (node.isRoom) return "data room and everything in it";
+  return node.type === "FOLDER" ? "folder and everything inside it" : "file";
 }
 
 function shareUrl(token: string): string {
