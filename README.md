@@ -378,18 +378,21 @@ who has never seen the product before: I decided what to build and how the data
 should be shaped, it wrote most of the code, and I kept the means of checking it
 in my own hands.
 
-**What I decided.** The data model, and the trade-offs behind it: an adjacency
-list with recursive CTEs rather than a closure table, because folders move often
-here and a closure table rewrites a row per ancestor-descendant pair on every
-move. Keyset pagination instead of `OFFSET`. Uploads going straight to storage
-so file bytes never pass through the API. 404-never-403 for a node you do not
-own, and a single 410 for every kind of dead link. Denormalised folder totals
-maintained inside the transaction that changes them *and* a reconciliation
-script, rather than either on its own. And every product call: that a name
-clash offers "keep both" instead of refusing, that dragging a ticked row takes
-the whole selection with it, that the delete confirmation states real numbers,
-that the delete preview keeps reading the tree even though a faster number sits
-right there - and what to leave out when the time ran short.
+**What I decided.** This began as a written spec, drafted with the model before
+any code existed: I described the product and the constraints, it laid out the
+options, and the choices between them are mine - along with the reasons the
+"Design decisions" section above gives for them. An adjacency list with
+recursive CTEs rather than a closure table, because folders move often here and
+a closure table rewrites a row per ancestor-descendant pair on every move.
+Keyset pagination instead of `OFFSET`. Uploads going straight to storage so file
+bytes never pass through the API. 404-never-403 for a node you do not own, and a
+single 410 for every kind of dead link. Denormalised folder totals maintained
+inside the transaction that changes them *and* a reconciliation script, rather
+than either on its own. The product calls are mine too: that a name clash offers
+"keep both" instead of refusing, that dragging a ticked row takes the whole
+selection with it, that the delete confirmation states real numbers, that the
+delete preview keeps reading the tree even though a faster number sits right
+there - and what to leave out when the time ran short.
 
 **What the model wrote.** Most of the implementation, the recursive SQL, the
 Vitest and Playwright suites, and the first draft of this README. It is quick at
