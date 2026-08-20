@@ -135,21 +135,19 @@ export function FileBrowser({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>
-              <SortableHeader column="name" sorting={sorting}>
-                Name
-              </SortableHeader>
-            </TableHead>
-            <TableHead className="w-28">
-              <SortableHeader column="size" sorting={sorting}>
-                Size
-              </SortableHeader>
-            </TableHead>
-            <TableHead className="w-36">
-              <SortableHeader column="updated" sorting={sorting}>
-                Modified
-              </SortableHeader>
-            </TableHead>
+            <SortableHeader column="name" sorting={sorting}>
+              Name
+            </SortableHeader>
+            <SortableHeader column="size" sorting={sorting} className="w-28">
+              Size
+            </SortableHeader>
+            <SortableHeader
+              column="updated"
+              sorting={sorting}
+              className="w-36"
+            >
+              Modified
+            </SortableHeader>
             {renderRowActions && (
               <TableHead className="w-12">
                 <span className="sr-only">Actions</span>
@@ -301,21 +299,24 @@ export function FileBrowser({
 function SortableHeader({
   column,
   sorting,
+  className,
   children,
 }: {
   column: NodeSort;
   sorting: FileBrowserProps["sorting"];
+  className?: string;
   children: ReactNode;
 }) {
-  if (!sorting) return <>{children}</>;
+  if (!sorting) return <TableHead className={className}>{children}</TableHead>;
 
   const isActive = sorting.sort === column;
 
   return (
-    <button
-      type="button"
-      onClick={() => sorting.onSort(column)}
-      aria-label={`Sort by ${column}`}
+    // aria-sort belongs to the column, not to the control inside it: it
+    // describes how the data is ordered, which is a property of the header
+    // cell rather than of the button that changes it.
+    <TableHead
+      className={className}
       aria-sort={
         isActive
           ? sorting.direction === "asc"
@@ -323,19 +324,25 @@ function SortableHeader({
             : "descending"
           : "none"
       }
-      className={cn(
-        "hover:text-foreground -mx-1 flex cursor-pointer items-center gap-1 rounded px-1",
-        !isActive && "text-muted-foreground",
-      )}
     >
-      {children}
-      {isActive &&
-        (sorting.direction === "asc" ? (
-          <ArrowUpIcon className="size-3" />
-        ) : (
-          <ArrowDownIcon className="size-3" />
-        ))}
-    </button>
+      <button
+        type="button"
+        onClick={() => sorting.onSort(column)}
+        aria-label={`Sort by ${column}`}
+        className={cn(
+          "hover:text-foreground -mx-1 flex cursor-pointer items-center gap-1 rounded px-1",
+          !isActive && "text-muted-foreground",
+        )}
+      >
+        {children}
+        {isActive &&
+          (sorting.direction === "asc" ? (
+            <ArrowUpIcon className="size-3" />
+          ) : (
+            <ArrowDownIcon className="size-3" />
+          ))}
+      </button>
+    </TableHead>
   );
 }
 

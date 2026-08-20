@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -49,7 +49,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </Link>
         </nav>
         <div className="hidden flex-1 justify-center px-4 sm:flex">
-          <SearchBox />
+          {/* SearchBox reads the query string, which opts its subtree out of
+              static rendering. Without this boundary that bailout reaches the
+              whole layout and no page under it can prerender at all. */}
+          <Suspense fallback={<div className="h-8 w-full max-w-xs" />}>
+            <SearchBox />
+          </Suspense>
         </div>
         <div className="flex items-center gap-3 text-sm">
           <ThemeToggle />
