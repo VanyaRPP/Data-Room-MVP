@@ -40,5 +40,8 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
+      # The same Supabase project backs local development and the deployed
+      # demo, so this points at the one existing bucket. Re-running the seed
+      # restores a known-good demo state if local work disturbs it.
       - key: SUPABASE_BUCKET
-        value: dataroom-prod
+        value: dataroom-dev
