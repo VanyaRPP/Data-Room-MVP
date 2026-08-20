@@ -1,12 +1,23 @@
 import { Controller, Get, Param, ParseUUIDPipe, Query } from '@nestjs/common';
+import { ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import {
+  apiErrorShape,
+  breadcrumbDtoSchema,
   childrenQuerySchema,
+  fileUrlDtoSchema,
+  nodePageSchema,
+  publicShareDtoSchema,
   type BreadcrumbDto,
   type ChildrenQuery,
   type FileUrlDto,
   type NodePage,
   type PublicShareDto,
 } from '@dataroom/shared';
+import {
+  ApiZodArrayResponse,
+  ApiZodQuery,
+  ApiZodResponse,
+} from '../common/api-docs';
 import { zodPipe } from '../common/zod-validation.pipe';
 import { OptionalUser, Public, type RequestUser } from '../auth/decorators';
 import type { ShareViewer } from '../access/access.service';
@@ -19,12 +30,26 @@ import { PublicService } from './public.service';
  * one when the cookie is present, which is what lets a RESTRICTED share tell
  * whether the visitor is someone it was shared with.
  */
+@ApiTags('Share links')
+@ApiParam({ name: 'token', description: 'The token from a share link' })
 @Public()
 @Controller('public')
 export class PublicController {
   constructor(private readonly publicService: PublicService) {}
 
   @Get(':token')
+  @ApiOperation({
+    summary: 'What this link points at',
+    description:
+      'A public link opens for anyone. A restricted one answers 401 for a ' +
+      'signed-out visitor and 403 for a signed-in one who was not granted ' +
+      'access. A revoked, deleted or invented token is 410 either way - ' +
+      'telling those apart would confirm a token was once real.',
+  })
+  @ApiZodResponse(200, publicShareDtoSchema, 'The shared item')
+  @ApiZodResponse(401, apiErrorShape, 'Restricted: sign in first')
+  @ApiZodResponse(403, apiErrorShape, 'Restricted: not shared with you')
+  @ApiZodResponse(410, apiErrorShape, 'The link is no longer available')
   describe(
     @Param('token') token: string,
     @OptionalUser() user: RequestUser | undefined,
@@ -33,6 +58,16 @@ export class PublicController {
   }
 
   @Get(':token/nodes/:id/children')
+  @ApiOperation({
+    summary: 'Contents of a folder inside the share',
+    description:
+      'Identical to the owner-facing listing. A node outside the shared ' +
+      'subtree answers 404: the link grants access to a branch, not a room.',
+  })
+  @ApiParam({ name: 'id', format: 'uuid', description: 'Folder id' })
+  @ApiZodQuery(childrenQuerySchema)
+  @ApiZodResponse(200, nodePageSchema, 'One page of contents')
+  @ApiZodResponse(404, apiErrorShape, 'Not inside this share')
   listChildren(
     @Param('token') token: string,
     @Param('id', ParseUUIDPipe) id: string,
@@ -43,6 +78,14 @@ export class PublicController {
   }
 
   @Get(':token/nodes/:id/breadcrumbs')
+  @ApiOperation({
+    summary: 'The path within the share',
+    description:
+      'Stops at whatever was shared, so a link cannot reveal the folder names ' +
+      'above it.',
+  })
+  @ApiParam({ name: 'id', format: 'uuid', description: 'Folder or file id' })
+  @ApiZodArrayResponse(200, breadcrumbDtoSchema, 'Shared root first')
   breadcrumbs(
     @Param('token') token: string,
     @Param('id', ParseUUIDPipe) id: string,
@@ -52,6 +95,9 @@ export class PublicController {
   }
 
   @Get(':token/files/:id/url')
+  @ApiOperation({ summary: 'A short-lived URL for a file inside the share' })
+  @ApiParam({ name: 'id', format: 'uuid', description: 'File id' })
+  @ApiZodResponse(200, fileUrlDtoSchema, 'Signed URL and its expiry')
   fileUrl(
     @Param('token') token: string,
     @Param('id', ParseUUIDPipe) id: string,

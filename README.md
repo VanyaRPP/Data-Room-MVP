@@ -5,15 +5,18 @@ viewer, rename/move/delete, and sharing by public link or per-person access gran
 
 ## Live demo
 
-<!-- Deployment is the last step; fill these in once Vercel/Render/Neon are live. -->
-
 | | |
 |---|---|
-| Web | _not deployed yet_ |
-| API | _not deployed yet_ |
+| Web | https://data-room-mvp-web.vercel.app |
+| API | https://dataroom-api-7uax.onrender.com |
+| API reference | https://dataroom-api-7uax.onrender.com/docs |
 | Demo account | `demo@dataroom.app` / `Demo1234!` |
 
 The demo account starts with a small folder tree and four sample PDFs.
+
+**The first request may take up to a minute.** The API runs on Render's free
+tier, which stops the container after fifteen minutes of inactivity and cold
+starts it on the next request. Everything is quick once it is awake.
 
 ## Features
 
@@ -24,16 +27,23 @@ Everything listed here is implemented and reachable from the UI.
   enforced per folder
 - PDF upload by drag-and-drop or file picker, uploaded straight to object
   storage with per-file progress, retry, and a queue that survives navigation
-- Duplicate names resolved by suffixing (`report.pdf` → `report (1).pdf`)
-  rather than rejected
-- Move via a lazily expanded folder picker, with a name clash answered in place
-  by "Keep both"
+- Uploading a name that already exists asks whether to keep both, which
+  suffixes (`report.pdf` → `report (1).pdf`), or to replace the file and keep
+  the old copy in its history
+- Move by drag-and-drop onto a folder row or the row that leads back up, or
+  through a lazily expanded folder picker; a name clash is answered in place by
+  "Keep both"
 - Delete with a confirmation that states exactly what goes: how many folders and
   files, and how much data
-- In-browser PDF viewer, plus an escape hatch to open in a new tab
+- In-browser PDF viewer with version history, plus an escape hatch to open in a
+  new tab
+- Search by name across the whole data room, each result showing its path
 - Cursor-paginated listings, folders before files, then by name
+- Any level of the trail can be peeked at from the breadcrumbs without
+  navigating there
 
 **Sharing**
+- Share the whole data room, any folder, or a single file
 - Public links: anyone holding the link can view, no account needed
 - Per-person grants by email address, which work even if the recipient has no
   account yet and resolve the moment they register
@@ -43,9 +53,12 @@ Everything listed here is implemented and reachable from the UI.
 - Every shared view is strictly read-only: mutation controls are absent, not
   disabled
 
-**Accounts**
+**Accounts and interface**
 - Email/password with argon2id, JWT in an httpOnly cookie, rate-limited auth
   endpoints
+- Light and dark themes, following the system until told otherwise
+- An OpenAPI reference at `/docs`, generated from the same schemas that
+  validate the requests
 
 ## Setup locally
 
@@ -269,13 +282,14 @@ Most of what this needs is already in place:
   pages cost what shallow ones cost
 - **Case-insensitive uniqueness** enforced by the index rather than by scanning
   siblings
+- **Server-side search**, because scrolling stops being a way to find anything.
+  It matches anywhere in the name, which a btree cannot help with at all - only
+  anchored prefixes - so a trigram GIN index on `lower(name)` backs it.
 
 What would need to change:
 
 - **List virtualization** on the client. The table renders every loaded row; past
   a few thousand it needs windowing (`@tanstack/virtual`) so the DOM stays small.
-- **Server-side search**, since scrolling stops being a way to find anything. A
-  trigram index on `lower(name)` covers substring search within a room.
 - **Bounded recursion**. A deliberately deep tree makes recursive CTEs expensive;
   a depth cap on folder creation, or a `WHERE depth < n` guard in the CTEs, keeps
   the cost predictable.
@@ -306,6 +320,8 @@ component with actions passed in.
 - **Playwright** covers the one path that has to work end to end: register,
   create a folder, upload, rename, share, open the link from a second browser
   context as an outsider would, revoke, and confirm the link is closed off.
+  `E2E_BASE_URL=https://… pnpm test:e2e` runs the same pass against a
+  deployment instead of a local stack.
 
 ## AI usage
 
@@ -325,5 +341,9 @@ component with actions passed in.
   question. An append-only log of views and downloads per share is the natural
   next model.
 - **Editor role**, as described above.
-- **File versioning.** Re-uploading a document currently creates a second file
-  rather than a new version of the first.
+- **Restoring an older version.** History can be read and any version viewed,
+  but making an old one current again is not wired up - it is one more row and
+  a pointer swap, using the machinery that is already there.
+- **Search beyond names.** Matching is on file names only; extracting PDF text
+  into a `tsvector` would make the contents searchable, which is what someone
+  reading a data room actually wants.
