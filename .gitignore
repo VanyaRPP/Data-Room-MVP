@@ -139,8 +139,10 @@ dist
 .turbo
 
 # Playwright
-/test-results/
-/playwright-report/
+# Unanchored: Playwright writes these wherever it is invoked from, not only
+# at the repo root.
+test-results/
+playwright-report/
 /blob-report/
 
 # Prisma
