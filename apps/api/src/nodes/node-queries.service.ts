@@ -115,6 +115,7 @@ export class NodeQueriesService {
     const rows = await this.prisma.$queryRaw<ChildRow[]>`
       SELECT
         "id", "parentId", "type", "name", "size", "mimeType", "status",
+        "subtreeBytes", "subtreeFiles", "subtreeFolders",
         "createdAt", "updatedAt",
         ${rank} AS "sortRank",
         ${column}::text AS "sortKey"

@@ -102,6 +102,7 @@ point both `DATABASE_URL` and `DIRECT_URL` at it (the commented-out lines in
 pnpm typecheck && pnpm lint && pnpm build   # must all pass
 pnpm test                                   # unit tests (Vitest)
 pnpm test:e2e                               # end-to-end smoke run (Playwright)
+pnpm --filter api counters:check            # folder totals still match the tree
 ```
 
 ## Data model
@@ -258,21 +259,35 @@ risk disagreeing with Postgres's collation, so the server never does.
 
 ### Counting and sizing a subtree
 
-Today the delete preview runs one recursive CTE, which is a single round trip
-regardless of depth and fast at any size a data room realistically reaches.
+Both answers are in the code, because the two are needed for different things.
 
-If subtree statistics became hot - a size column on every folder row, say, or a
-storage quota checked on every upload - the next step is **denormalized counters**
-on `Node` (`descendantFolders`, `descendantFiles`, `descendantBytes`), maintained
-transactionally or by trigger. Reads become a single row fetch; writes gain an
-update along the ancestor chain, which is O(depth) and bounded in practice.
+**A recursive CTE** computes it from the tree, in a single round trip whatever
+the depth. This is what the delete confirmation uses: it states how much is
+about to be destroyed, and that number has to be derived from the truth rather
+than from something that might have drifted.
 
-The trade-off is the usual one: a counter can drift if any write path forgets to
-maintain it, whereas a CTE is derived from the truth and cannot. That argues for
-adding counters only when measurement demands it, and for a periodic
-reconciliation job when they are added. A **closure table** is the other option -
-it makes subtree aggregates a single indexed scan - but it pays for that on every
-move, and moving folders is a first-class operation here.
+**Running totals on each node** (`subtreeBytes`, `subtreeFiles`,
+`subtreeFolders`) are what the listing uses, because showing a size for every
+folder row would otherwise be a recursive query per row. They are maintained by
+`SubtreeCountersService`, which walks the ancestor chain - O(depth), bounded in
+practice - inside the same transaction as the change that caused them to move.
+That is what makes an upload that fails, or a move rejected for a name clash,
+leave the totals exactly as they were. The arithmetic is `SET x = x + delta` in
+SQL rather than read-modify-write in the application, so two uploads into one
+folder serialise on the row lock and both land.
+
+The cost of denormalizing is that a counter is only correct while every write
+path maintains it, and there are six: publishing an upload, replacing a file
+with a new version, creating a folder, moving, deleting, and the seed. Miss one
+and the number drifts silently and permanently. So the counters are not the
+interesting part - the reconciliation is. `pnpm --filter api counters:check`
+recomputes every node from the tree and reports anything that disagrees;
+`rebuildSubtreeCounters` repairs it. That check is how the counters are tested,
+and in production it is what a nightly job would run.
+
+A **closure table** is the other way to make subtree aggregates cheap - one
+indexed scan, no drift - but it rewrites a row per ancestor-descendant pair on
+every move, and moving folders is a first-class operation here.
 
 ### 100,000 files in one room
 

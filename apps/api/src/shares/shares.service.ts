@@ -116,7 +116,8 @@ export class SharesService {
     const rows = await this.prisma.$queryRaw<SharedWithMeRow[]>`
       SELECT
         n."id", n."parentId", n."type", n."name", n."size", n."mimeType",
-        n."status", n."createdAt", n."updatedAt",
+        n."status", n."subtreeBytes", n."subtreeFiles", n."subtreeFolders",
+        n."createdAt", n."updatedAt",
         s."token",
         u."name"      AS "sharedBy",
         s."createdAt" AS "sharedAt"

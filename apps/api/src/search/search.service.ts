@@ -42,7 +42,8 @@ export class SearchService {
       WITH RECURSIVE matches AS (
         SELECT
           n."id", n."parentId", n."type", n."name", n."size", n."mimeType",
-          n."status", n."createdAt", n."updatedAt",
+          n."status", n."subtreeBytes", n."subtreeFiles", n."subtreeFolders",
+          n."createdAt", n."updatedAt",
           -- Names that start with the query come first: someone typing
           -- "cap" wants "cap-table.pdf" before "recap-2025.pdf".
           (CASE WHEN lower(n."name") LIKE ${startsWith} ESCAPE '\\' THEN 0 ELSE 1 END) AS "sortRank",

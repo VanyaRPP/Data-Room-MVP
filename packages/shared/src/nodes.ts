@@ -25,6 +25,15 @@ export const nodeDtoSchema = z.strictObject({
   status: fileStatusSchema.nullable(),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
+
+  /**
+   * Running totals for everything beneath this node, so a folder can report
+   * its size without the client asking per row. Zero on files, which contain
+   * nothing. A string for the same reason `size` is: it is a Postgres bigint.
+   */
+  subtreeBytes: z.string(),
+  subtreeFiles: z.number().int().nonnegative(),
+  subtreeFolders: z.number().int().nonnegative(),
 });
 
 export type NodeDto = z.infer<typeof nodeDtoSchema>;

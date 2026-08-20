@@ -259,7 +259,7 @@ export function FileBrowser({
                 />
               </TableCell>
               <TableCell className="text-muted-foreground tabular-nums">
-                {formatBytes(node.size)}
+                <NodeSize node={node} />
               </TableCell>
               <TableCell className="text-muted-foreground">
                 {formatDate(node.updatedAt)}
@@ -344,6 +344,41 @@ function SortableHeader({
       </button>
     </TableHead>
   );
+}
+
+/**
+ * A file reports its own size; a folder reports what it contains.
+ *
+ * The folder figure comes from a running total kept on the row, not from a
+ * query per line - which is the whole reason those totals exist. The tooltip
+ * spells out what makes up the number, since "48 MB" alone does not say
+ * whether that is one document or two hundred.
+ */
+function NodeSize({ node }: { node: NodeDto }) {
+  if (node.type === "FILE") return <>{formatBytes(node.size)}</>;
+
+  const isEmpty = node.subtreeFiles === 0 && node.subtreeFolders === 0;
+  if (isEmpty) return <span className="text-muted-foreground/60">Empty</span>;
+
+  const contents = [
+    node.subtreeFolders > 0 && plural(node.subtreeFolders, "folder"),
+    node.subtreeFiles > 0 && plural(node.subtreeFiles, "file"),
+  ]
+    .filter((part): part is string => part !== false)
+    .join(", ");
+
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<span className="cursor-default" />}>
+        {formatBytes(node.subtreeBytes)}
+      </TooltipTrigger>
+      <TooltipContent>Contains {contents}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function plural(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }
 
 function NodeName({

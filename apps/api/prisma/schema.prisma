@@ -72,6 +72,14 @@ model Node {
   storageKey String?     @unique
   status     FileStatus? // UPLOADING until /files/:id/complete confirms the upload, then READY
 
+  // Running totals for everything *below* this node, so a folder can show its
+  // size without a recursive query per row. Maintained inside the same
+  // transaction as any write that changes them - see SubtreeCountersService,
+  // and the reconciliation test that proves they still match the CTE.
+  subtreeBytes   BigInt @default(0)
+  subtreeFiles   Int    @default(0)
+  subtreeFolders Int    @default(0)
+
   // The node always holds the *current* version, so listings need no join.
   // Superseded versions are archived as FileVersion rows numbered 1..version-1.
   version Int @default(1)

@@ -20,6 +20,11 @@ import { isUniqueConstraintViolation } from '../common/prisma-errors';
 import { StorageService } from '../storage/storage.service';
 import { NameConflictService } from './name-conflict.service';
 import { NodeQueriesService } from './node-queries.service';
+import {
+  SubtreeCountersService,
+  contributionOf,
+  negate,
+} from './subtree-counters.service';
 import { toNodeDto } from './node-dto';
 
 interface SubtreeStatsRow {
@@ -35,6 +40,7 @@ export class NodesService {
     private readonly access: AccessService,
     private readonly nameConflict: NameConflictService,
     private readonly queries: NodeQueriesService,
+    private readonly counters: SubtreeCountersService,
     private readonly storage: StorageService,
   ) {}
 
@@ -66,14 +72,25 @@ export class NodesService {
     if (conflict) throw new ConflictException(conflictMessage(conflict.type));
 
     try {
-      const folder = await this.prisma.node.create({
-        data: {
-          roomId: parent.roomId,
-          parentId: parent.id,
-          type: 'FOLDER',
-          name: input.name,
-        },
+      const folder = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.node.create({
+          data: {
+            roomId: parent.roomId,
+            parentId: parent.id,
+            type: 'FOLDER',
+            name: input.name,
+          },
+        });
+
+        await this.counters.applyToAncestors(tx, parent.id, {
+          bytes: 0n,
+          files: 0,
+          folders: 1,
+        });
+
+        return created;
       });
+
       return toNodeDto(folder);
     } catch (error) {
       throw this.asConflict(error);
@@ -154,10 +171,26 @@ export class NodesService {
     }
 
     try {
-      const moved = await this.prisma.node.update({
-        where: { id: node.id },
-        data: { parentId: target.id, name },
+      // The node's own totals describe what is beneath it and do not change;
+      // what moves is its contribution, off one branch and onto the other.
+      const contribution = contributionOf(node);
+
+      const moved = await this.prisma.$transaction(async (tx) => {
+        const updated = await tx.node.update({
+          where: { id: node.id },
+          data: { parentId: target.id, name },
+        });
+
+        await this.counters.applyToAncestors(
+          tx,
+          currentParentId,
+          negate(contribution),
+        );
+        await this.counters.applyToAncestors(tx, target.id, contribution);
+
+        return updated;
       });
+
       return toNodeDto(moved);
     } catch (error) {
       throw this.asConflict(error);
@@ -235,10 +268,18 @@ export class NodesService {
    */
   async delete(nodeId: string, userId: string): Promise<void> {
     const node = await this.access.requireOwnedNode(nodeId, userId);
-    requireParentId(node, 'deleted');
+    const parentId = requireParentId(node, 'deleted');
 
     const storageKeys = await this.collectStorageKeys(node.id);
-    await this.prisma.node.delete({ where: { id: node.id } });
+    const contribution = contributionOf(node);
+
+    await this.prisma.$transaction(async (tx) => {
+      // Adjust before the row is gone: afterwards there is no node left to
+      // walk up from, and the ancestors would keep counting what they lost.
+      await this.counters.applyToAncestors(tx, parentId, negate(contribution));
+      await tx.node.delete({ where: { id: node.id } });
+    });
+
     await this.storage.removeMany(storageKeys);
   }
 

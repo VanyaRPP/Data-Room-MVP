@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { PrismaClient } from "@prisma/client";
 import { createClient } from "@supabase/supabase-js";
 import * as argon2 from "argon2";
+import { rebuildSubtreeCounters } from "../src/nodes/subtree-sql";
 
 const prisma = new PrismaClient();
 
@@ -67,6 +68,10 @@ async function main(): Promise<void> {
       fileCount += 1;
     }
   }
+
+  // The seed writes rows directly rather than through the services that keep
+  // the folder totals up to date, so it settles them once at the end.
+  await rebuildSubtreeCounters(prisma);
 
   console.log(
     `Seeded ${DEMO_EMAIL} (password: ${DEMO_PASSWORD}) with ${LAYOUT.length} folders and ${fileCount} files`,

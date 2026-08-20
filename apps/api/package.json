@@ -18,7 +18,8 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
-    "db:seed": "prisma db seed"
+    "db:seed": "prisma db seed",
+    "counters:check": "tsx scripts/check-counters.ts"
   },
   "dependencies": {
     "@dataroom/shared": "workspace:*",

@@ -12,6 +12,9 @@ export interface NodeRowShape {
   size: bigint | null;
   mimeType: string | null;
   status: FileStatus | null;
+  subtreeBytes: bigint;
+  subtreeFiles: number;
+  subtreeFolders: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -27,6 +30,9 @@ export function toNodeDto(node: NodeRowShape): NodeDto {
     size: node.size === null ? null : node.size.toString(),
     mimeType: node.mimeType,
     status: node.status,
+    subtreeBytes: node.subtreeBytes.toString(),
+    subtreeFiles: node.subtreeFiles,
+    subtreeFolders: node.subtreeFolders,
     createdAt: node.createdAt.toISOString(),
     updatedAt: node.updatedAt.toISOString(),
   };

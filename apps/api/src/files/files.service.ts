@@ -19,6 +19,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { AccessService, type OwnedNode } from '../access/access.service';
 import { NameConflictService } from '../nodes/name-conflict.service';
+import { SubtreeCountersService } from '../nodes/subtree-counters.service';
 import { toNodeDto } from '../nodes/node-dto';
 import { StorageService } from '../storage/storage.service';
 
@@ -28,6 +29,7 @@ export class FilesService {
     private readonly prisma: PrismaService,
     private readonly access: AccessService,
     private readonly nameConflict: NameConflictService,
+    private readonly counters: SubtreeCountersService,
     private readonly storage: StorageService,
   ) {}
 
@@ -153,9 +155,21 @@ export class FilesService {
       this.discard(node.id, currentKey),
     );
 
-    const ready = await this.prisma.node.update({
-      where: { id: node.id },
-      data: { status: 'READY', size: BigInt(object.size) },
+    const ready = await this.prisma.$transaction(async (tx) => {
+      const published = await tx.node.update({
+        where: { id: node.id },
+        data: { status: 'READY', size: BigInt(object.size) },
+      });
+
+      // The file counts towards its folders only now: until this point the
+      // row existed but held no bytes anyone could see.
+      await this.counters.applyToAncestors(tx, node.parentId, {
+        bytes: BigInt(object.size),
+        files: 1,
+        folders: 0,
+      });
+
+      return published;
     });
 
     return toNodeDto(ready);
@@ -194,7 +208,7 @@ export class FilesService {
         },
       });
 
-      return tx.node.update({
+      const promoted = await tx.node.update({
         where: { id: node.id },
         data: {
           version: node.version + 1,
@@ -204,6 +218,16 @@ export class FilesService {
           status: 'READY',
         },
       });
+
+      // The file count is unchanged - it is the same document - but its size
+      // is not, so the folders above it move by the difference.
+      await this.counters.applyToAncestors(tx, node.parentId, {
+        bytes: BigInt(object.size) - (node.size ?? 0n),
+        files: 0,
+        folders: 0,
+      });
+
+      return promoted;
     });
 
     return toNodeDto(updated);

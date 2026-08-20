@@ -39,6 +39,9 @@ function buildNode(overrides: Partial<OwnedNode> = {}): OwnedNode {
     status: null,
     version: 1,
     pendingStorageKey: null,
+    subtreeBytes: 0n,
+    subtreeFiles: 0,
+    subtreeFolders: 0,
     createdAt: new Date(),
     updatedAt: new Date(),
     room: {

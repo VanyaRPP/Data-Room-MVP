@@ -5,11 +5,17 @@ import { NameConflictService } from './name-conflict.service';
 import { NodeQueriesService } from './node-queries.service';
 import { NodesController } from './nodes.controller';
 import { NodesService } from './nodes.service';
+import { SubtreeCountersService } from './subtree-counters.service';
 
 @Module({
   imports: [StorageModule],
   controllers: [NodesController, FoldersController],
-  providers: [NodesService, NameConflictService, NodeQueriesService],
-  exports: [NameConflictService, NodeQueriesService],
+  providers: [
+    NodesService,
+    NameConflictService,
+    NodeQueriesService,
+    SubtreeCountersService,
+  ],
+  exports: [NameConflictService, NodeQueriesService, SubtreeCountersService],
 })
 export class NodesModule {}
