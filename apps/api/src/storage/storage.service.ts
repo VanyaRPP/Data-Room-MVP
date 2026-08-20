@@ -39,7 +39,7 @@ export class StorageService {
     );
 
     if (error || !data) {
-      throw new BadGatewayException('Could not start the upload. Try again.');
+      throw this.storageFailure('sign an upload for', storageKey, error);
     }
 
     return data.signedUrl;
@@ -63,10 +63,31 @@ export class StorageService {
     );
 
     if (error || !data) {
-      throw new BadGatewayException('Could not open this file. Try again.');
+      throw this.storageFailure('sign a view URL for', storageKey, error);
     }
 
     return data.signedUrl;
+  }
+
+  /**
+   * Keeps the cause in the server log while the client gets a plain message.
+   *
+   * Storage failures are almost always configuration - a wrong key, a bucket
+   * that does not exist - and none of that belongs in a response, but an
+   * operator staring at a 502 has nothing to go on without it.
+   */
+  private storageFailure(
+    action: string,
+    storageKey: string,
+    error: { message: string } | null,
+  ): BadGatewayException {
+    this.logger.error(
+      `Storage could not ${action} "${storageKey}" in bucket "${env.SUPABASE_BUCKET}": ${error?.message ?? 'no response'}`,
+    );
+
+    return new BadGatewayException(
+      'Storage is unavailable right now. Try again.',
+    );
   }
 
   /**
